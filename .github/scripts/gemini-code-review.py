@@ -64,11 +64,15 @@ class GeminiCodeReview:
     def classify_file(self, file_path: str) -> str:
         normalized = file_path.replace("\\", "/")
 
-        if normalized.startswith(".github/") or normalized.endswith((".yml", ".yaml")):
+        if normalized.startswith(".github/"):
+            return "config"
+        if normalized.endswith((".gradle", ".properties", ".yml", ".yaml")):
+            return "config"
+        if normalized.startswith("src/main/resources/"):
             return "config"
         if normalized.endswith((".md", ".txt")):
             return "docs"
-        if "/src/test/" in normalized and normalized.endswith(".java"):
+        if normalized.startswith("src/test/") and normalized.endswith(".java"):
             return "test"
         if not normalized.endswith(".java"):
             return "ignore"
@@ -87,34 +91,48 @@ class GeminiCodeReview:
 
         return "ignore"
 
-    def extract_meaningful_diff(self, patch: Optional[str]) -> str:
+    def extract_file_diff(self, patch: Optional[str], max_size: int = 12000) -> str:
         if not patch:
             return ""
 
-        filtered = []
-        for line in patch.splitlines():
-            if line.startswith(("+++", "---")):
-                continue
-            if line.startswith(("+", "-")):
-                filtered.append(line)
+        diff = patch.strip()
+        if len(diff) <= max_size:
+            return diff
 
-        return "\n".join(filtered)
-
-    def split_chunks(self, code: str, max_size: int = 5000) -> List[str]:
-        return [code[i : i + max_size] for i in range(0, len(code), max_size)]
+        return (
+            diff[:max_size]
+            + "\n\n... diff가 길어 일부만 포함되었습니다. 위 범위 기준으로 파일 단위 요약 리뷰를 작성하세요."
+        )
 
     def build_prompt(self, file_path: str, code: str, category: str) -> str:
         return f"""
 당신은 Wrap 프로젝트의 Spring Boot 백엔드 Pull Request를 리뷰하는 시니어 백엔드 개발자입니다.
 
-반드시 한국어로 리뷰하세요.
+반드시 한국어로 답변하세요.
+리뷰 방식은 "전체 변경사항에 대한 파일 단위 요약 리뷰"입니다.
+아래 diff는 하나의 파일에 대한 변경사항입니다. 이 파일에서 무엇이 바뀌었고, 그 변경이 어떤 영향을 주는지 요약한 뒤 필요한 리뷰 의견만 작성하세요.
 
-diff에서 확인되는 구체적인 위험만 리뷰하세요. 버그, 보안 문제, 잘못된 JPA 매핑,
-깨질 수 있는 Spring Data Repository 메서드, 누락된 검증, 트랜잭션 경계 문제,
-API 계약 문제, 테스트 공백을 우선적으로 확인하세요.
+출력 형식은 반드시 아래 형식을 따르세요.
 
-칭찬이나 일반적인 요약은 작성하지 마세요. 변경되지 않은 코드를 설명하지 마세요.
-의미 있는 문제가 없으면 "차단 이슈 없음."이라고만 작성하세요. 리뷰는 간결하게 작성하세요.
+**변경 요약**
+- 이 파일에서 바뀐 내용을 1~3개 bullet로 요약
+
+**영향 범위**
+- 이 변경이 영향을 주는 기능, 계층, 실행 흐름을 1~3개 bullet로 요약
+
+**확인 필요**
+- 실제 버그, 설계 리스크, 누락된 검증, 테스트 공백이 있으면 bullet로 작성
+- 확인할 문제가 없으면 `- 없음`으로 작성
+
+**제안**
+- 바로 반영하면 좋은 개선이 있으면 bullet로 작성
+- 제안할 내용이 없으면 `- 없음`으로 작성
+
+리뷰 기준:
+- 변경되지 않은 코드는 길게 설명하지 마세요.
+- 단순 칭찬은 작성하지 마세요.
+- 추측성 지적은 피하고 diff에서 근거가 보이는 내용만 작성하세요.
+- Java, Spring Boot, JPA, Spring Data Repository, Gradle 설정 관점에서 확인하세요.
 
 프로젝트 컨텍스트:
 - Wrap은 단기 프로젝트 운영 플랫폼입니다.
@@ -122,8 +140,8 @@ API 계약 문제, 테스트 공백을 우선적으로 확인하세요.
 - Deliverable은 Task.deliverable로 표현합니다.
 - Task.assignee는 Member가 아니라 ProjectMember를 참조해야 합니다.
 
-Review category: {category}
-File: {file_path}
+리뷰 분류: {category}
+파일: {file_path}
 
 Diff:
 ```diff
@@ -154,13 +172,13 @@ Diff:
                 model=self.model,
                 contents=prompt,
             )
-            return getattr(response, "text", "") or "No response from Gemini."
+            return getattr(response, "text", "") or "Gemini 응답이 없습니다."
 
         return self.retry_with_backoff(request)
 
     def create_review_comment(self, review: str):
         url = f"https://api.github.com/repos/{self.repo}/issues/{self.pr_number}/comments"
-        data = {"body": f"## Gemini 코드 리뷰\n\n{review}"}
+        data = {"body": f"## Gemini 파일 단위 요약 리뷰\n\n{review}"}
         response = requests.post(url, headers=self.github_headers(), json=data, timeout=20)
 
         if response.status_code != 201:
@@ -183,23 +201,21 @@ Diff:
         return sorted(filtered, key=lambda item: self.priority.get(item[0], 999))
 
     def run(self):
-        print("Starting Gemini code review")
+        print("Starting Gemini file summary review")
 
         reviews = []
         for category, file in self.get_review_targets():
-            diff = self.extract_meaningful_diff(file.get("patch"))
+            diff = self.extract_file_diff(file.get("patch"))
             if not diff.strip():
                 continue
 
-            for index, chunk in enumerate(self.split_chunks(diff), start=1):
-                prompt = self.build_prompt(file["filename"], chunk, category)
-                review = self.call_gemini(prompt)
-                chunk_label = f" chunk {index}" if len(diff) > 5000 else ""
-                reviews.append(f"### `{file['filename']}`{chunk_label}\n\n{review}")
+            prompt = self.build_prompt(file["filename"], diff, category)
+            review = self.call_gemini(prompt)
+            reviews.append(f"### `{file['filename']}`\n\n{review}")
 
         if reviews:
             self.create_review_comment("\n\n".join(reviews))
-            print("Gemini review comment created")
+            print("Gemini file summary review comment created")
         else:
             print("No reviewable files found")
 
