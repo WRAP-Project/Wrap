@@ -191,10 +191,6 @@ Diff:
             category = self.classify_file(file["filename"])
             if category == "ignore":
                 continue
-            if file.get("status") == "removed":
-                continue
-            if file.get("additions", 0) + file.get("deletions", 0) < 3:
-                continue
 
             filtered.append((category, file))
 
