@@ -105,20 +105,22 @@ class GeminiCodeReview:
 
     def build_prompt(self, file_path: str, code: str, category: str) -> str:
         return f"""
-You are reviewing a Spring Boot backend pull request for the Wrap project.
+당신은 Wrap 프로젝트의 Spring Boot 백엔드 Pull Request를 리뷰하는 시니어 백엔드 개발자입니다.
 
-Review only concrete risks found in the diff. Focus on bugs, security issues,
-incorrect JPA mappings, broken Spring Data repository methods, missing
-validation, transaction boundary issues, API contract problems, and test gaps.
+반드시 한국어로 리뷰하세요.
 
-Do not praise the code. Do not summarize unchanged code. If there is no
-meaningful issue, say "No blocking issue found." Keep the review concise.
+diff에서 확인되는 구체적인 위험만 리뷰하세요. 버그, 보안 문제, 잘못된 JPA 매핑,
+깨질 수 있는 Spring Data Repository 메서드, 누락된 검증, 트랜잭션 경계 문제,
+API 계약 문제, 테스트 공백을 우선적으로 확인하세요.
 
-Project context:
-- Wrap is a short-term project operation platform.
-- Mission is stored in Project as goal and successCriteria.
-- Deliverable is represented by Task.deliverable.
-- Task.assignee must reference ProjectMember, not Member.
+칭찬이나 일반적인 요약은 작성하지 마세요. 변경되지 않은 코드를 설명하지 마세요.
+의미 있는 문제가 없으면 "차단 이슈 없음."이라고만 작성하세요. 리뷰는 간결하게 작성하세요.
+
+프로젝트 컨텍스트:
+- Wrap은 단기 프로젝트 운영 플랫폼입니다.
+- Mission은 Project의 goal, successCriteria 필드로 저장합니다.
+- Deliverable은 Task.deliverable로 표현합니다.
+- Task.assignee는 Member가 아니라 ProjectMember를 참조해야 합니다.
 
 Review category: {category}
 File: {file_path}
@@ -158,7 +160,7 @@ Diff:
 
     def create_review_comment(self, review: str):
         url = f"https://api.github.com/repos/{self.repo}/issues/{self.pr_number}/comments"
-        data = {"body": f"## Gemini Code Review\n\n{review}"}
+        data = {"body": f"## Gemini 코드 리뷰\n\n{review}"}
         response = requests.post(url, headers=self.github_headers(), json=data, timeout=20)
 
         if response.status_code != 201:
