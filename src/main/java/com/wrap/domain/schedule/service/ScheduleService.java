@@ -4,6 +4,7 @@ import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
+import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
@@ -87,16 +88,23 @@ public class ScheduleService {
     @Transactional
     public ScheduleResponse update(Long memberId, Long scheduleId, ScheduleUpdateRequest request) {
         Schedule schedule = findSchedule(scheduleId);
-        validateScheduleOwner(memberId, schedule);
+        validateScheduleWritable(memberId, schedule);
 
-        Project project = resolveProject(memberId, request.projectId(), request.shared());
+        Project project = resolveProjectForUpdate(memberId, schedule, request);
+        String title = request.title() == null ? schedule.getTitle() : request.title();
+        String description = request.description() == null ? schedule.getDescription() : request.description();
+        LocalDateTime startAt = request.startAt() == null ? schedule.getStartAt() : request.startAt();
+        LocalDateTime endAt = request.endAt() == null ? schedule.getEndAt() : request.endAt();
+        boolean shared = request.shared() == null ? schedule.isShared() : request.shared();
+
+        validateDateRange(startAt, endAt);
         schedule.update(
                 project,
-                request.title(),
-                request.description(),
-                request.startAt(),
-                request.endAt(),
-                request.shared()
+                title,
+                description,
+                startAt,
+                endAt,
+                shared
         );
 
         return ScheduleResponse.from(schedule);
@@ -105,7 +113,7 @@ public class ScheduleService {
     @Transactional
     public void delete(Long memberId, Long scheduleId) {
         Schedule schedule = findSchedule(scheduleId);
-        validateScheduleOwner(memberId, schedule);
+        validateScheduleWritable(memberId, schedule);
         scheduleRepository.delete(schedule);
     }
 
@@ -157,6 +165,26 @@ public class ScheduleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
+    private Project resolveProjectForUpdate(Long memberId, Schedule schedule, ScheduleUpdateRequest request) {
+        boolean shared = request.shared() == null ? schedule.isShared() : request.shared();
+
+        if (!shared) {
+            return null;
+        }
+
+        Long projectId = request.projectId();
+        if (projectId == null) {
+            if (schedule.getProject() == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+            projectId = schedule.getProject().getId();
+        }
+
+        validateJoinedProjectMember(memberId, projectId);
+        return projectRepository.findById(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
     private void validateJoinedProjectMember(Long memberId, Long projectId) {
         boolean exists = projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
                 memberId,
@@ -172,9 +200,31 @@ public class ScheduleService {
         }
     }
 
-    private void validateScheduleOwner(Long memberId, Schedule schedule) {
-        if (!schedule.getCreator().getId().equals(memberId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+    private void validateScheduleWritable(Long memberId, Schedule schedule) {
+        if (schedule.getCreator().getId().equals(memberId)) {
+            return;
+        }
+
+        Project project = schedule.getProject();
+        if (schedule.isShared() && project != null && isProjectOwner(memberId, project.getId())) {
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private boolean isProjectOwner(Long memberId, Long projectId) {
+        return projectMemberRepository.existsByMemberIdAndProjectIdAndRoleAndStatus(
+                memberId,
+                projectId,
+                ProjectMemberRole.OWNER,
+                ProjectMemberStatus.JOINED
+        );
+    }
+
+    private void validateDateRange(LocalDateTime startAt, LocalDateTime endAt) {
+        if (!endAt.isAfter(startAt)) {
+            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
         }
     }
 
