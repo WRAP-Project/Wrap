@@ -1,6 +1,7 @@
 package com.wrap.domain.projectmember.repository;
 
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,10 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     Optional<ProjectMember> findByMemberIdAndProjectId(Long memberId, Long projectId);
 
     boolean existsByMemberIdAndProjectId(Long memberId, Long projectId);
+
+    boolean existsByMemberIdAndProjectIdAndStatus(
+            Long memberId,
+            Long projectId,
+            ProjectMemberStatus status
+    );
 }

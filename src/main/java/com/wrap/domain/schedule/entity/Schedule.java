@@ -58,4 +58,25 @@ public class Schedule {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public Schedule(Project project, Member creator, String title, String description,
+                    LocalDateTime startAt, LocalDateTime endAt, boolean shared) {
+        this.project = project;
+        this.creator = creator;
+        this.title = title;
+        this.description = description;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.shared = shared;
+    }
+
+    public void update(Project project, String title, String description,
+                       LocalDateTime startAt, LocalDateTime endAt, boolean shared) {
+        this.project = project;
+        this.title = title;
+        this.description = description;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.shared = shared;
+    }
 }
