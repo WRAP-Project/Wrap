@@ -124,7 +124,7 @@ class MemberServiceTest {
         assertThatThrownBy(() -> memberService.login(request, httpRequest))
                 .isInstanceOf(CustomException.class)
                 .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
-                        .isEqualTo(ErrorCode.UNAUTHORIZED));
+                        .isEqualTo(ErrorCode.LOGIN_FAILED));
     }
 
     @Test

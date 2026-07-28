@@ -50,7 +50,7 @@ public class MemberService {
         MemberDetails memberDetails = (MemberDetails) userDetailsService.loadUserByUsername(request.getEmail());
 
         if (!passwordEncoder.matches(request.getPassword(), memberDetails.getPassword())) {
-            throw new CustomException(ErrorCode.UNAUTHORIZED);
+            throw new CustomException(ErrorCode.LOGIN_FAILED);
         }
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
