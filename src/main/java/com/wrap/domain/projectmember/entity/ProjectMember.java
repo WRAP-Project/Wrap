@@ -50,11 +50,11 @@ public class ProjectMember {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ProjectMemberRole role;
+    private ProjectMemberRole role = ProjectMemberRole.MEMBER;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ProjectMemberStatus status;
+    private ProjectMemberStatus status = ProjectMemberStatus.INVITED;
 
     @Column(name = "joined_at")
     private LocalDateTime joinedAt;
@@ -62,102 +62,4 @@ public class ProjectMember {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    public static ProjectMember createOwner(
-            Member member,
-            Project project,
-            LocalDateTime joinedAt
-    ) {
-        return createJoined(member, project, ProjectMemberRole.OWNER, joinedAt);
-    }
-
-    public static ProjectMember join(
-            Member member,
-            Project project,
-            ProjectMemberRole role,
-            LocalDateTime joinedAt
-    ) {
-        return createJoined(member, project, role, joinedAt);
-    }
-
-    public void rejoin(ProjectMemberRole newRole, LocalDateTime joinedAt) {
-        if (status != ProjectMemberStatus.LEFT) {
-            throw new IllegalStateException("나간 프로젝트 멤버만 다시 참여할 수 있습니다.");
-        }
-
-        this.role = requireRole(newRole);
-        this.status = ProjectMemberStatus.JOINED;
-        this.joinedAt = requireJoinedAt(joinedAt);
-    }
-
-    public void changeRole(ProjectMemberRole newRole) {
-        requireJoinedMember();
-        this.role = requireRole(newRole);
-    }
-
-    public void leave() {
-        requireJoinedMember();
-        this.status = ProjectMemberStatus.LEFT;
-    }
-
-    public boolean isOwner() {
-        return role == ProjectMemberRole.OWNER;
-    }
-
-    public boolean isJoined() {
-        return status == ProjectMemberStatus.JOINED;
-    }
-
-    public boolean isJoinedOwner() {
-        return isJoined() && isOwner();
-    }
-
-    private static ProjectMember createJoined(
-            Member member,
-            Project project,
-            ProjectMemberRole role,
-            LocalDateTime joinedAt
-    ) {
-        ProjectMember projectMember = new ProjectMember();
-        projectMember.member = requireMember(member);
-        projectMember.project = requireProject(project);
-        projectMember.role = requireRole(role);
-        projectMember.status = ProjectMemberStatus.JOINED;
-        projectMember.joinedAt = requireJoinedAt(joinedAt);
-        return projectMember;
-    }
-
-    private void requireJoinedMember() {
-        if (!isJoined()) {
-            throw new IllegalStateException("참여 중인 프로젝트 멤버만 변경할 수 있습니다.");
-        }
-    }
-
-    private static Member requireMember(Member member) {
-        if (member == null) {
-            throw new IllegalArgumentException("회원은 필수입니다.");
-        }
-        return member;
-    }
-
-    private static Project requireProject(Project project) {
-        if (project == null) {
-            throw new IllegalArgumentException("프로젝트는 필수입니다.");
-        }
-        return project;
-    }
-
-    private static ProjectMemberRole requireRole(ProjectMemberRole role) {
-        if (role == null) {
-            throw new IllegalArgumentException("프로젝트 역할은 필수입니다.");
-        }
-        return role;
-    }
-
-    private static LocalDateTime requireJoinedAt(LocalDateTime joinedAt) {
-        if (joinedAt == null) {
-            throw new IllegalArgumentException("프로젝트 참여 시각은 필수입니다.");
-        }
-        return joinedAt;
-    }
 }
