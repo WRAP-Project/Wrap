@@ -25,7 +25,7 @@ public record ScheduleReminderResponse(
                 schedule.getStartAt(),
                 schedule.getEndAt(),
                 schedule.isShared(),
-                ChronoUnit.DAYS.between(today, schedule.getStartAt().toLocalDate())
+                ChronoUnit.DAYS.between(today, schedule.getEndAt().toLocalDate())
         );
     }
 }

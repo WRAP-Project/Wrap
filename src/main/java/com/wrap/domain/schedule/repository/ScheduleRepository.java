@@ -47,9 +47,9 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
             select s from Schedule s
             where s.project.id = :projectId
               and s.shared = true
-              and s.startAt >= :now
-              and s.startAt < :until
-            order by s.startAt asc
+              and s.endAt >= :now
+              and s.endAt < :until
+            order by s.endAt asc
             """)
     List<Schedule> findUpcomingSharedProjectSchedules(
             @Param("projectId") Long projectId,

@@ -13,7 +13,7 @@ import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
 import com.wrap.domain.schedule.entity.Schedule;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
-import com.wrap.global.exception.BusinessException;
+import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -123,7 +123,7 @@ public class ScheduleService {
         int reminderDays = days == null ? DEFAULT_REMINDER_DAYS : days;
         int reminderLimit = limit == null ? DEFAULT_REMINDER_LIMIT : limit;
         if (reminderDays <= 0 || reminderLimit <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -143,17 +143,21 @@ public class ScheduleService {
 
     private Member findMember(Long memberId) {
         return memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
     }
 
     private Schedule findSchedule(Long scheduleId) {
         return scheduleRepository.findById(scheduleId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.SCHEDULE_NOT_FOUND));
     }
 
     private Project resolveProject(Long memberId, Long projectId, boolean shared) {
         if (shared && projectId == null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        if (!shared) {
+            return null;
         }
 
         if (projectId == null) {
@@ -162,7 +166,7 @@ public class ScheduleService {
 
         validateJoinedProjectMember(memberId, projectId);
         return projectRepository.findById(projectId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
     private Project resolveProjectForUpdate(Long memberId, Schedule schedule, ScheduleUpdateRequest request) {
@@ -175,14 +179,14 @@ public class ScheduleService {
         Long projectId = request.projectId();
         if (projectId == null) {
             if (schedule.getProject() == null) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
             projectId = schedule.getProject().getId();
         }
 
         validateJoinedProjectMember(memberId, projectId);
         return projectRepository.findById(projectId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
     private void validateJoinedProjectMember(Long memberId, Long projectId) {
@@ -194,9 +198,9 @@ public class ScheduleService {
 
         if (!exists) {
             if (!projectRepository.existsById(projectId)) {
-                throw new BusinessException(ErrorCode.PROJECT_NOT_FOUND);
+                throw new CustomException(ErrorCode.PROJECT_NOT_FOUND);
             }
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new CustomException(ErrorCode.FORBIDDEN);
         }
     }
 
@@ -210,7 +214,7 @@ public class ScheduleService {
             return;
         }
 
-        throw new BusinessException(ErrorCode.FORBIDDEN);
+        throw new CustomException(ErrorCode.FORBIDDEN);
     }
 
     private boolean isProjectOwner(Long memberId, Long projectId) {
@@ -224,7 +228,7 @@ public class ScheduleService {
 
     private void validateDateRange(LocalDateTime startAt, LocalDateTime endAt) {
         if (!endAt.isAfter(startAt)) {
-            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+            throw new CustomException(ErrorCode.INVALID_DATE_RANGE);
         }
     }
 
