@@ -6,39 +6,38 @@ import org.springframework.http.HttpStatus;
 @Getter
 public enum ErrorCode {
 
-    VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "요청 값이 올바르지 않습니다."),
-    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다."),
-    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED", "이메일 또는 비밀번호가 올바르지 않습니다."),
-    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다."),
-    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", "회원을 찾을 수 없습니다."),
-    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다."),
-    PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "프로젝트를 찾을 수 없습니다."),
+    VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Invalid request."),
+    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", "Invalid date range."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required."),
+    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED", "Email or password is invalid."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access is denied."),
+    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", "Member not found."),
+    PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "Project not found."),
+    PROJECT_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_MEMBER_NOT_FOUND", "Project member not found."),
     PROJECT_ACCESS_DENIED(
             HttpStatus.FORBIDDEN,
             "PROJECT_ACCESS_DENIED",
-            "프로젝트에 접근할 권한이 없습니다."
+            "Project access is denied."
     ),
     PROJECT_OWNER_REQUIRED(
             HttpStatus.FORBIDDEN,
             "PROJECT_OWNER_REQUIRED",
-            "프로젝트 OWNER 권한이 필요합니다."
+            "Project owner permission is required."
     ),
     PROJECT_ALREADY_COMPLETED(
             HttpStatus.CONFLICT,
             "PROJECT_ALREADY_COMPLETED",
-            "이미 완료된 프로젝트입니다."
+            "Project is already completed."
     ),
     PROJECT_NOT_COMPLETED(
             HttpStatus.CONFLICT,
             "PROJECT_NOT_COMPLETED",
-            "완료된 프로젝트만 재진행할 수 있습니다."
+            "Only completed projects can be reopened."
     ),
-    INVALID_PROJECT_DATE(
-            HttpStatus.BAD_REQUEST,
-            "INVALID_PROJECT_DATE",
-            "프로젝트 시작일은 종료일보다 늦을 수 없습니다."
-    ),
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 내부 오류가 발생했습니다.");
+    SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email already exists."),
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Internal server error.");
 
     private final HttpStatus httpStatus;
     private final String code;
