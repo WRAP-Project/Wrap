@@ -3,6 +3,7 @@ package com.wrap.domain.task.entity;
 import com.wrap.domain.milestone.entity.Milestone;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.task.enums.TaskPriority;
 import com.wrap.domain.task.enums.TaskStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -57,6 +58,13 @@ public class Task {
 
     @Column(name = "due_date")
     private LocalDate dueDate;
+
+    @Column(nullable = false)
+    private int progress = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TaskPriority priority = TaskPriority.MEDIUM;
 
     @Column(name = "is_deliverable", nullable = false)
     private boolean deliverable = false;
