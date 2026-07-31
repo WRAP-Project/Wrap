@@ -12,14 +12,18 @@ import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
+import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -114,6 +118,65 @@ class ProjectServiceTest {
         verifyNoInteractions(projectRepository, projectMemberRepository);
     }
 
+    @Test
+    @DisplayName("내 프로젝트 목록 조회 성공 - 참여 중인 프로젝트를 요약 응답으로 반환한다")
+    void getMyProjects_success() {
+        Member member = mock(Member.class);
+        Project wrap = project(10L, "Wrap");
+        Project graduation = project(20L, "Graduation");
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 1, 9, 0);
+        List<ProjectMember> memberships = List.of(
+                ProjectMember.createOwner(member, wrap, joinedAt),
+                ProjectMember.createOwner(member, graduation, joinedAt)
+        );
+        given(projectMemberRepository
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        1L,
+                        ProjectMemberStatus.JOINED
+                ))
+                .willReturn(memberships);
+
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses)
+                .extracting(ProjectSummaryResponse::getId)
+                .containsExactly(10L, 20L);
+        assertThat(responses)
+                .extracting(ProjectSummaryResponse::getName)
+                .containsExactly("Wrap", "Graduation");
+        assertThat(responses)
+                .extracting(ProjectSummaryResponse::getStatus)
+                .containsOnly(ProjectStatus.IN_PROGRESS);
+        verify(projectMemberRepository)
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        1L,
+                        ProjectMemberStatus.JOINED
+                );
+        verifyNoInteractions(memberRepository, projectRepository);
+    }
+
+    @Test
+    @DisplayName("내 프로젝트 목록 조회 성공 - 참여 프로젝트가 없으면 빈 목록을 반환한다")
+    void getMyProjects_empty() {
+        given(projectMemberRepository
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        1L,
+                        ProjectMemberStatus.JOINED
+                ))
+                .willReturn(List.of());
+
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L);
+
+        assertThat(responses).isEmpty();
+        verify(projectMemberRepository)
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        1L,
+                        ProjectMemberStatus.JOINED
+                );
+        verifyNoInteractions(memberRepository, projectRepository);
+    }
+
     private ProjectCreateRequest createRequest(
             String name,
             LocalDate startDate,
@@ -127,5 +190,18 @@ class ProjectServiceTest {
         ReflectionTestUtils.setField(request, "startDate", startDate);
         ReflectionTestUtils.setField(request, "endDate", endDate);
         return request;
+    }
+
+    private Project project(Long id, String name) {
+        Project project = Project.create(
+                name,
+                "프로젝트 설명",
+                "프로젝트 목표",
+                "성공 기준",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 8, 31)
+        );
+        ReflectionTestUtils.setField(project, "id", id);
+        return project;
     }
 }

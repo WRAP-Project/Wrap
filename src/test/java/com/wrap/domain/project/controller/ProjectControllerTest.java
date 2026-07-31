@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,11 +15,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
+import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.service.ProjectService;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -96,6 +99,52 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void getMyProjectsReturnsSummariesAndUsesAuthenticatedMemberId() throws Exception {
+        List<ProjectSummaryResponse> responses = List.of(
+                ProjectSummaryResponse.builder()
+                        .id(10L)
+                        .name("Wrap")
+                        .status(ProjectStatus.IN_PROGRESS)
+                        .startDate(LocalDate.of(2026, 7, 1))
+                        .endDate(LocalDate.of(2026, 8, 31))
+                        .build(),
+                ProjectSummaryResponse.builder()
+                        .id(20L)
+                        .name("Graduation")
+                        .status(ProjectStatus.COMPLETED)
+                        .startDate(LocalDate.of(2026, 3, 1))
+                        .endDate(LocalDate.of(2026, 6, 30))
+                        .build()
+        );
+        when(projectService.getMyProjects(1L)).thenReturn(responses);
+
+        mockMvc.perform(get("/projects")
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(10))
+                .andExpect(jsonPath("$.data[0].name").value("Wrap"))
+                .andExpect(jsonPath("$.data[0].status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data[1].id").value(20))
+                .andExpect(jsonPath("$.data[1].name").value("Graduation"))
+                .andExpect(jsonPath("$.data[1].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.message").value("My projects retrieved."));
+
+        verify(projectService).getMyProjects(1L);
+    }
+
+    @Test
+    void getMyProjectsWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/projects"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(projectService);
     }

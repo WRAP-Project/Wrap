@@ -4,14 +4,17 @@ import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
+import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +52,19 @@ public class ProjectService {
         projectMemberRepository.save(owner);
 
         return ProjectResponse.from(savedProject);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectSummaryResponse> getMyProjects(Long memberId) {
+        return projectMemberRepository
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        memberId,
+                        ProjectMemberStatus.JOINED
+                )
+                .stream()
+                .map(ProjectMember::getProject)
+                .map(ProjectSummaryResponse::from)
+                .toList();
     }
 
     private void validateDateRange(LocalDate startDate, LocalDate endDate) {
