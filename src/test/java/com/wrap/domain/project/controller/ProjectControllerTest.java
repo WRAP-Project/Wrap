@@ -8,12 +8,14 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
+import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.enums.ProjectStatus;
@@ -188,6 +190,73 @@ class ProjectControllerTest {
         verifyNoInteractions(projectService);
     }
 
+    @Test
+    void updateReturnsUpdatedProjectAndUsesAuthenticatedMemberId() throws Exception {
+        ProjectResponse response = ProjectResponse.builder()
+                .id(10L)
+                .name("Updated Wrap")
+                .description("Updated description")
+                .goal("Updated goal")
+                .successCriteria("Updated criteria")
+                .startDate(LocalDate.of(2026, 9, 1))
+                .endDate(LocalDate.of(2026, 10, 31))
+                .status(ProjectStatus.IN_PROGRESS)
+                .build();
+        when(projectService.update(eq(1L), eq(10L), any(ProjectUpdateRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateRequest()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(10))
+                .andExpect(jsonPath("$.data.name").value("Updated Wrap"))
+                .andExpect(jsonPath("$.data.description").value("Updated description"))
+                .andExpect(jsonPath("$.data.goal").value("Updated goal"))
+                .andExpect(jsonPath("$.data.successCriteria").value("Updated criteria"))
+                .andExpect(jsonPath("$.message").value("Project updated."));
+
+        verify(projectService).update(eq(1L), eq(10L), any(ProjectUpdateRequest.class));
+    }
+
+    @Test
+    void updateWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateRequest()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void updateWithBlankNameReturnsBadRequest() throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": " ",
+                                  "description": "Updated description",
+                                  "startDate": "2026-09-01",
+                                  "endDate": "2026-10-31"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
     private MemberDetails memberDetails(Long memberId) {
         Member member = Member.builder()
                 .email("member@example.com")
@@ -207,6 +276,19 @@ class ProjectControllerTest {
                   "successCriteria": "Success criteria",
                   "startDate": "2026-07-01",
                   "endDate": "2026-08-31"
+                }
+                """;
+    }
+
+    private String validUpdateRequest() {
+        return """
+                {
+                  "name": "Updated Wrap",
+                  "description": "Updated description",
+                  "goal": "Updated goal",
+                  "successCriteria": "Updated criteria",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-10-31"
                 }
                 """;
     }

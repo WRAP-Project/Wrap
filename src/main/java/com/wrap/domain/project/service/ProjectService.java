@@ -3,6 +3,7 @@ package com.wrap.domain.project.service;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
+import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
@@ -74,6 +75,29 @@ public class ProjectService {
         return ProjectResponse.from(project);
     }
 
+    @Transactional
+    public ProjectResponse update(
+            Long memberId,
+            Long projectId,
+            ProjectUpdateRequest request
+    ) {
+        Project project = findActiveProject(projectId);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        validateOwner(projectMember);
+        validateDateRange(request.getStartDate(), request.getEndDate());
+
+        project.update(
+                request.getName(),
+                request.getDescription(),
+                request.getGoal(),
+                request.getSuccessCriteria(),
+                request.getStartDate(),
+                request.getEndDate()
+        );
+
+        return ProjectResponse.from(project);
+    }
+
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
@@ -86,6 +110,12 @@ public class ProjectService {
                         ProjectMemberStatus.JOINED
                 )
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_ACCESS_DENIED));
+    }
+
+    private void validateOwner(ProjectMember projectMember) {
+        if (!projectMember.isOwner()) {
+            throw new CustomException(ErrorCode.PROJECT_OWNER_REQUIRED);
+        }
     }
 
     private void validateDateRange(LocalDate startDate, LocalDate endDate) {

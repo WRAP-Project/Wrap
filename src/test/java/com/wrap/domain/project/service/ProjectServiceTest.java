@@ -11,12 +11,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
+import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
@@ -255,6 +257,113 @@ class ProjectServiceTest {
         verifyNoInteractions(memberRepository);
     }
 
+    @Test
+    @DisplayName("프로젝트 수정 성공 - OWNER가 프로젝트 정보를 변경한다")
+    void update_success() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember owner = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        ProjectUpdateRequest request = updateRequest(
+                "Updated Wrap",
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 10, 31)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+
+        ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getName()).isEqualTo("Updated Wrap");
+        assertThat(response.getDescription()).isEqualTo("Updated description");
+        assertThat(response.getGoal()).isEqualTo("Updated goal");
+        assertThat(response.getSuccessCriteria()).isEqualTo("Updated criteria");
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(response.getEndDate()).isEqualTo(LocalDate.of(2026, 10, 31));
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 수정 실패 - OWNER가 아닌 멤버는 수정할 수 없다")
+    void update_ownerRequired() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember joinedMember = ProjectMember.join(
+                member,
+                project,
+                ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        ProjectUpdateRequest request = updateRequest(
+                "Updated Wrap",
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 10, 31)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(joinedMember));
+
+        assertThatThrownBy(() -> projectService.update(1L, 10L, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+
+        assertThat(project.getName()).isEqualTo("Wrap");
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 수정 실패 - 시작일이 종료일보다 늦다")
+    void update_invalidDateRange() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember owner = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        ProjectUpdateRequest request = updateRequest(
+                "Updated Wrap",
+                LocalDate.of(2026, 10, 31),
+                LocalDate.of(2026, 9, 1)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+
+        assertThatThrownBy(() -> projectService.update(1L, 10L, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.INVALID_DATE_RANGE));
+
+        assertThat(project.getName()).isEqualTo("Wrap");
+        verifyNoInteractions(memberRepository);
+    }
+
     private ProjectCreateRequest createRequest(
             String name,
             LocalDate startDate,
@@ -265,6 +374,21 @@ class ProjectServiceTest {
         ReflectionTestUtils.setField(request, "description", "프로젝트 설명");
         ReflectionTestUtils.setField(request, "goal", "프로젝트 목표");
         ReflectionTestUtils.setField(request, "successCriteria", "성공 기준");
+        ReflectionTestUtils.setField(request, "startDate", startDate);
+        ReflectionTestUtils.setField(request, "endDate", endDate);
+        return request;
+    }
+
+    private ProjectUpdateRequest updateRequest(
+            String name,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        ProjectUpdateRequest request = new ProjectUpdateRequest();
+        ReflectionTestUtils.setField(request, "name", name);
+        ReflectionTestUtils.setField(request, "description", "Updated description");
+        ReflectionTestUtils.setField(request, "goal", "Updated goal");
+        ReflectionTestUtils.setField(request, "successCriteria", "Updated criteria");
         ReflectionTestUtils.setField(request, "startDate", startDate);
         ReflectionTestUtils.setField(request, "endDate", endDate);
         return request;
