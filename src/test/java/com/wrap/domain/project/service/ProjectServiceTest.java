@@ -364,6 +364,97 @@ class ProjectServiceTest {
         verifyNoInteractions(memberRepository);
     }
 
+    @Test
+    @DisplayName("프로젝트 완료 성공 - OWNER가 진행 중인 프로젝트를 완료한다")
+    void complete_success() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember owner = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+
+        ProjectResponse response = projectService.complete(1L, 10L);
+
+        assertThat(response.getStatus()).isEqualTo(ProjectStatus.COMPLETED);
+        assertThat(response.getCompletedAt()).isNotNull();
+        assertThat(project.isCompleted()).isTrue();
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 완료 실패 - OWNER가 아닌 멤버는 완료할 수 없다")
+    void complete_ownerRequired() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember joinedMember = ProjectMember.join(
+                member,
+                project,
+                ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(joinedMember));
+
+        assertThatThrownBy(() -> projectService.complete(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+
+        assertThat(project.isCompleted()).isFalse();
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 완료 실패 - 이미 완료된 프로젝트다")
+    void complete_alreadyCompleted() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        project.complete(LocalDateTime.of(2026, 8, 31, 18, 0));
+        ProjectMember owner = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+
+        assertThatThrownBy(() -> projectService.complete(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        assertThat(project.getCompletedAt())
+                .isEqualTo(LocalDateTime.of(2026, 8, 31, 18, 0));
+        verifyNoInteractions(memberRepository);
+    }
+
     private ProjectCreateRequest createRequest(
             String name,
             LocalDate startDate,

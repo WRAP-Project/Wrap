@@ -98,6 +98,20 @@ public class ProjectService {
         return ProjectResponse.from(project);
     }
 
+    @Transactional
+    public ProjectResponse complete(Long memberId, Long projectId) {
+        Project project = findActiveProject(projectId);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        validateOwner(projectMember);
+
+        if (project.isCompleted()) {
+            throw new CustomException(ErrorCode.PROJECT_ALREADY_COMPLETED);
+        }
+
+        project.complete(LocalDateTime.now());
+        return ProjectResponse.from(project);
+    }
+
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));

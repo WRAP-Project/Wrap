@@ -79,4 +79,16 @@ public class ProjectController {
                 "Project updated."
         );
     }
+
+    @Operation(summary = "프로젝트 완료")
+    @PatchMapping("/{projectId}/complete")
+    public ApiResponse<ProjectResponse> complete(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId
+    ) {
+        return ApiResponse.success(
+                projectService.complete(memberDetails.getMemberId(), projectId),
+                "Project completed."
+        );
+    }
 }
