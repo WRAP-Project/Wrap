@@ -290,6 +290,41 @@ class ProjectControllerTest {
         verifyNoInteractions(projectService);
     }
 
+    @Test
+    void reopenReturnsInProgressProjectAndUsesAuthenticatedMemberId() throws Exception {
+        ProjectResponse response = ProjectResponse.builder()
+                .id(10L)
+                .name("Wrap")
+                .status(ProjectStatus.IN_PROGRESS)
+                .completedAt(null)
+                .build();
+        when(projectService.reopen(1L, 10L)).thenReturn(response);
+
+        mockMvc.perform(patch("/projects/10/reopen")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(10))
+                .andExpect(jsonPath("$.data.name").value("Wrap"))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.completedAt").doesNotExist())
+                .andExpect(jsonPath("$.message").value("Project reopened."));
+
+        verify(projectService).reopen(1L, 10L);
+    }
+
+    @Test
+    void reopenWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(patch("/projects/10/reopen")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectService);
+    }
+
     private MemberDetails memberDetails(Long memberId) {
         Member member = Member.builder()
                 .email("member@example.com")

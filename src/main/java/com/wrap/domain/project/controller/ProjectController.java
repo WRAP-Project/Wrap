@@ -91,4 +91,16 @@ public class ProjectController {
                 "Project completed."
         );
     }
+
+    @Operation(summary = "프로젝트 재진행")
+    @PatchMapping("/{projectId}/reopen")
+    public ApiResponse<ProjectResponse> reopen(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId
+    ) {
+        return ApiResponse.success(
+                projectService.reopen(memberDetails.getMemberId(), projectId),
+                "Project reopened."
+        );
+    }
 }
