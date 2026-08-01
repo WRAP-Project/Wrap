@@ -67,6 +67,27 @@ public class ProjectService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public ProjectResponse getProject(Long memberId, Long projectId) {
+        Project project = findActiveProject(projectId);
+        findJoinedMember(memberId, projectId);
+        return ProjectResponse.from(project);
+    }
+
+    private Project findActiveProject(Long projectId) {
+        return projectRepository.findByIdAndDeletedAtIsNull(projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    private ProjectMember findJoinedMember(Long memberId, Long projectId) {
+        return projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                        memberId,
+                        projectId,
+                        ProjectMemberStatus.JOINED
+                )
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_ACCESS_DENIED));
+    }
+
     private void validateDateRange(LocalDate startDate, LocalDate endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new CustomException(ErrorCode.INVALID_DATE_RANGE);

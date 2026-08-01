@@ -149,6 +149,45 @@ class ProjectControllerTest {
         verifyNoInteractions(projectService);
     }
 
+    @Test
+    void getProjectReturnsDetailAndUsesAuthenticatedMemberId() throws Exception {
+        ProjectResponse response = ProjectResponse.builder()
+                .id(10L)
+                .name("Wrap")
+                .description("Project description")
+                .goal("Project goal")
+                .successCriteria("Success criteria")
+                .startDate(LocalDate.of(2026, 7, 1))
+                .endDate(LocalDate.of(2026, 8, 31))
+                .status(ProjectStatus.IN_PROGRESS)
+                .build();
+        when(projectService.getProject(1L, 10L)).thenReturn(response);
+
+        mockMvc.perform(get("/projects/10")
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(10))
+                .andExpect(jsonPath("$.data.name").value("Wrap"))
+                .andExpect(jsonPath("$.data.description").value("Project description"))
+                .andExpect(jsonPath("$.data.goal").value("Project goal"))
+                .andExpect(jsonPath("$.data.successCriteria").value("Success criteria"))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.message").value("Project retrieved."));
+
+        verify(projectService).getProject(1L, 10L);
+    }
+
+    @Test
+    void getProjectWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/projects/10"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectService);
+    }
+
     private MemberDetails memberDetails(Long memberId) {
         Member member = Member.builder()
                 .email("member@example.com")

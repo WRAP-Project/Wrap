@@ -177,6 +177,84 @@ class ProjectServiceTest {
         verifyNoInteractions(memberRepository, projectRepository);
     }
 
+    @Test
+    @DisplayName("프로젝트 상세 조회 성공 - 참여 중인 멤버에게 상세 정보를 반환한다")
+    void getProject_success() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember membership = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(membership));
+
+        ProjectResponse response = projectService.getProject(1L, 10L);
+
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("Wrap");
+        assertThat(response.getDescription()).isEqualTo("프로젝트 설명");
+        assertThat(response.getGoal()).isEqualTo("프로젝트 목표");
+        assertThat(response.getSuccessCriteria()).isEqualTo("성공 기준");
+        assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 상세 조회 실패 - 프로젝트가 없거나 삭제되었다")
+    void getProject_projectNotFound() {
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.getProject(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_NOT_FOUND));
+
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verifyNoInteractions(memberRepository, projectMemberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 상세 조회 실패 - 참여 중인 멤버가 아니다")
+    void getProject_accessDenied() {
+        Project project = project(10L, "Wrap");
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.getProject(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ACCESS_DENIED));
+
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        verifyNoInteractions(memberRepository);
+    }
+
     private ProjectCreateRequest createRequest(
             String name,
             LocalDate startDate,
