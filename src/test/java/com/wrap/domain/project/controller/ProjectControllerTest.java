@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -317,6 +318,30 @@ class ProjectControllerTest {
     @Test
     void reopenWithoutAuthenticationReturnsUnauthorized() throws Exception {
         mockMvc.perform(patch("/projects/10/reopen")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void deleteReturnsSuccessAndUsesAuthenticatedMemberId() throws Exception {
+        mockMvc.perform(delete("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.message").value("Project deleted."));
+
+        verify(projectService).delete(1L, 10L);
+    }
+
+    @Test
+    void deleteWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(delete("/projects/10")
                         .with(csrf()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))

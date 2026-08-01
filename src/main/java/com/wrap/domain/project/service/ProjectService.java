@@ -126,6 +126,15 @@ public class ProjectService {
         return ProjectResponse.from(project);
     }
 
+    @Transactional
+    public void delete(Long memberId, Long projectId) {
+        Project project = findActiveProject(projectId);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        validateOwner(projectMember);
+
+        project.softDelete(LocalDateTime.now());
+    }
+
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -545,6 +546,84 @@ class ProjectServiceTest {
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(project.getCompletedAt()).isNull();
         verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 삭제 성공 - OWNER가 프로젝트를 Soft Delete한다")
+    void delete_success() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember owner = ProjectMember.createOwner(
+                member,
+                project,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+
+        projectService.delete(1L, 10L);
+
+        assertThat(project.isDeleted()).isTrue();
+        assertThat(project.getDeletedAt()).isNotNull();
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        verify(projectRepository, never()).delete(any(Project.class));
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 삭제 실패 - OWNER가 아닌 멤버는 삭제할 수 없다")
+    void delete_ownerRequired() {
+        Member member = mock(Member.class);
+        Project project = project(10L, "Wrap");
+        ProjectMember joinedMember = ProjectMember.join(
+                member,
+                project,
+                ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 7, 1, 9, 0)
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(joinedMember));
+
+        assertThatThrownBy(() -> projectService.delete(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+
+        assertThat(project.isDeleted()).isFalse();
+        verify(projectRepository, never()).delete(any(Project.class));
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트 삭제 실패 - 프로젝트가 없거나 이미 삭제되었다")
+    void delete_projectNotFound() {
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.delete(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_NOT_FOUND));
+
+        verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
+        verifyNoInteractions(memberRepository, projectMemberRepository);
     }
 
     private ProjectCreateRequest createRequest(
