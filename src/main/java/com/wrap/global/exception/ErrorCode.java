@@ -35,6 +35,16 @@ public enum ErrorCode {
             "PROJECT_NOT_COMPLETED",
             "Only completed projects can be reopened."
     ),
+    LAST_PROJECT_OWNER(
+            HttpStatus.CONFLICT,
+            "LAST_PROJECT_OWNER",
+            "The project must have at least one owner."
+    ),
+    PROJECT_OWNER_CANNOT_BE_REMOVED(
+            HttpStatus.CONFLICT,
+            "PROJECT_OWNER_CANNOT_BE_REMOVED",
+            "A project owner cannot be removed."
+    ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email already exists."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Internal server error.");
