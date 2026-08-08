@@ -333,6 +333,117 @@ class ProjectMemberServiceTest {
                 ).isEqualTo(ErrorCode.PROJECT_MEMBER_NOT_FOUND));
     }
 
+    @Test
+    @DisplayName("프로젝트 탈퇴 성공 - MEMBER가 프로젝트를 나간다")
+    void leaveProject_member_success() {
+        Project project = project(10L);
+        ProjectMember projectMember = projectMember(
+                100L,
+                member(1L, "member", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(projectMember));
+
+        projectMemberService.leaveProject(1L, 10L);
+
+        assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+    }
+
+    @Test
+    @DisplayName("프로젝트 탈퇴 성공 - OWNER가 두 명 이상이면 OWNER도 나갈 수 있다")
+    void leaveProject_owner_success() {
+        Project project = project(10L);
+        ProjectMember projectMember = projectMember(
+                100L,
+                member(1L, "owner", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(projectMember));
+        given(projectMemberRepository.countByProjectIdAndRoleAndStatus(
+                10L,
+                ProjectMemberRole.OWNER,
+                ProjectMemberStatus.JOINED
+        )).willReturn(2L);
+
+        projectMemberService.leaveProject(1L, 10L);
+
+        assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+    }
+
+    @Test
+    @DisplayName("프로젝트 탈퇴 실패 - 마지막 OWNER는 나갈 수 없다")
+    void leaveProject_lastOwner() {
+        Project project = project(10L);
+        ProjectMember projectMember = projectMember(
+                100L,
+                member(1L, "owner", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(projectMember));
+        given(projectMemberRepository.countByProjectIdAndRoleAndStatus(
+                10L,
+                ProjectMemberRole.OWNER,
+                ProjectMemberStatus.JOINED
+        )).willReturn(1L);
+
+        assertThatThrownBy(() -> projectMemberService.leaveProject(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.LAST_PROJECT_OWNER));
+
+        assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+    }
+
+    @Test
+    @DisplayName("프로젝트 탈퇴 실패 - 완료된 프로젝트에서는 나갈 수 없다")
+    void leaveProject_projectCompleted() {
+        Project project = project(10L);
+        project.complete(LocalDateTime.of(2026, 8, 1, 18, 0));
+        ProjectMember projectMember = projectMember(
+                100L,
+                member(1L, "member", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(projectMember));
+
+        assertThatThrownBy(() -> projectMemberService.leaveProject(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+    }
+
     private Member member(Long id, String nickname, String profileImage) {
         Member member = Member.builder()
                 .email(nickname + "@example.com")

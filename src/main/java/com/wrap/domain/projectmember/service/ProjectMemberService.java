@@ -61,6 +61,19 @@ public class ProjectMemberService {
         return ProjectMemberResponse.from(target);
     }
 
+    @Transactional
+    public void leaveProject(Long memberId, Long projectId) {
+        Project project = findActiveProject(projectId);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        validateProjectInProgress(project);
+
+        if (projectMember.isOwner()) {
+            validateNotLastOwner(projectId);
+        }
+
+        projectMember.leave();
+    }
+
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
