@@ -39,7 +39,9 @@ public class SecurityConfig {
                                 HttpMethod.POST, "/members/signup", "/members/login"
                         ).permitAll()
                         .requestMatchers(
-                                "/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**", "/api/test"
+                                "/h2-console/**", "/swagger-ui/**",
+                                "/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**",
+                                "/api/test"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
