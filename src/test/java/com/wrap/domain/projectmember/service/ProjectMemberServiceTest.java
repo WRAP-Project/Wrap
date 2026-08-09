@@ -444,6 +444,157 @@ class ProjectMemberServiceTest {
         assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
     }
 
+    @Test
+    @DisplayName("프로젝트 멤버 내보내기 성공 - OWNER가 MEMBER를 내보낸다")
+    void removeMember_success() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "owner", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        ProjectMember target = projectMember(
+                200L,
+                member(2L, "member", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(200L, 10L))
+                .willReturn(Optional.of(target));
+
+        projectMemberService.removeMember(1L, 10L, 200L);
+
+        assertThat(target.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+    }
+
+    @Test
+    @DisplayName("프로젝트 멤버 내보내기 실패 - 요청자가 OWNER가 아니다")
+    void removeMember_ownerRequired() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "member", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+
+        assertThatThrownBy(() -> projectMemberService.removeMember(1L, 10L, 200L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+    }
+
+    @Test
+    @DisplayName("프로젝트 멤버 내보내기 실패 - 완료된 프로젝트다")
+    void removeMember_projectCompleted() {
+        Project project = project(10L);
+        project.complete(LocalDateTime.of(2026, 8, 1, 18, 0));
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "owner", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+
+        assertThatThrownBy(() -> projectMemberService.removeMember(1L, 10L, 200L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ALREADY_COMPLETED));
+    }
+
+    @Test
+    @DisplayName("프로젝트 멤버 내보내기 실패 - OWNER는 내보낼 수 없다")
+    void removeMember_ownerCannotBeRemoved() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        ProjectMember target = projectMember(
+                200L,
+                member(2L, "target", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(200L, 10L))
+                .willReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> projectMemberService.removeMember(1L, 10L, 200L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_CANNOT_BE_REMOVED));
+
+        assertThat(target.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+    }
+
+    @Test
+    @DisplayName("프로젝트 멤버 내보내기 실패 - 대상이 JOINED 멤버가 아니다")
+    void removeMember_targetNotFound() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "owner", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        ProjectMember target = projectMember(
+                200L,
+                member(2L, "target", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        target.leave();
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(200L, 10L))
+                .willReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> projectMemberService.removeMember(1L, 10L, 200L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_MEMBER_NOT_FOUND));
+    }
+
     private Member member(Long id, String nickname, String profileImage) {
         Member member = Member.builder()
                 .email(nickname + "@example.com")

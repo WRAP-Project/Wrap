@@ -74,6 +74,21 @@ public class ProjectMemberService {
         projectMember.leave();
     }
 
+    @Transactional
+    public void removeMember(Long memberId, Long projectId, Long projectMemberId) {
+        Project project = findActiveProject(projectId);
+        ProjectMember requester = findJoinedMember(memberId, projectId);
+        validateOwner(requester);
+        validateProjectInProgress(project);
+
+        ProjectMember target = findJoinedProjectMember(projectMemberId, projectId);
+        if (target.isOwner()) {
+            throw new CustomException(ErrorCode.PROJECT_OWNER_CANNOT_BE_REMOVED);
+        }
+
+        target.leave();
+    }
+
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));

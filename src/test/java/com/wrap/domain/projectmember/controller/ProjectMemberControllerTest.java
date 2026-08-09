@@ -195,6 +195,30 @@ class ProjectMemberControllerTest {
         verifyNoInteractions(projectMemberService);
     }
 
+    @Test
+    void removeMemberReturnsSuccessAndUsesAuthenticatedMemberId() throws Exception {
+        mockMvc.perform(delete("/projects/10/members/200")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.message").value("Project member removed."));
+
+        verify(projectMemberService).removeMember(1L, 10L, 200L);
+    }
+
+    @Test
+    void removeMemberWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(delete("/projects/10/members/200")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectMemberService);
+    }
+
     private MemberDetails memberDetails(Long memberId) {
         Member member = Member.builder()
                 .email("member@example.com")

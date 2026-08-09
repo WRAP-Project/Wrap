@@ -70,4 +70,19 @@ public class ProjectMemberController {
         projectMemberService.leaveProject(memberDetails.getMemberId(), projectId);
         return ApiResponse.success("Project left.");
     }
+
+    @Operation(summary = "프로젝트 멤버 내보내기")
+    @DeleteMapping("/{projectMemberId}")
+    public ApiResponse<Void> removeMember(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId,
+            @PathVariable Long projectMemberId
+    ) {
+        projectMemberService.removeMember(
+                memberDetails.getMemberId(),
+                projectId,
+                projectMemberId
+        );
+        return ApiResponse.success("Project member removed.");
+    }
 }
