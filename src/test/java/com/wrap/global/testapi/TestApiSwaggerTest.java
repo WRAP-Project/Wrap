@@ -35,6 +35,21 @@ class TestApiSwaggerTest {
                 .andExpect(jsonPath("$.paths['/schedules/me']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules']").exists())
                 .andExpect(jsonPath("$.paths['/schedules/{scheduleId}']").exists())
-                .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists());
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/calendar/risk-checks']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}']").exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/me/response']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/responses']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/recommended-slots']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/confirm']"
+                ).exists());
     }
 }
