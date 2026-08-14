@@ -36,6 +36,16 @@ public enum ErrorCode {
             "Only completed projects can be reopened."
     ),
     TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "Task not found."),
+    LAST_PROJECT_OWNER(
+            HttpStatus.CONFLICT,
+            "LAST_PROJECT_OWNER",
+            "The project must have at least one owner."
+    ),
+    PROJECT_OWNER_CANNOT_BE_REMOVED(
+            HttpStatus.CONFLICT,
+            "PROJECT_OWNER_CANNOT_BE_REMOVED",
+            "A project owner cannot be removed."
+    ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
     AVAILABILITY_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,
