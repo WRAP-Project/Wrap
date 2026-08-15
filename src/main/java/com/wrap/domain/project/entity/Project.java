@@ -23,6 +23,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Project {
 
+    public static final String DEFAULT_COLOR = "#CDEA6F";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -44,6 +46,9 @@ public class Project {
 
     @Column(name = "end_date")
     private LocalDate endDate;
+
+    @Column(nullable = false, length = 7)
+    private String color = DEFAULT_COLOR;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -69,7 +74,8 @@ public class Project {
             String goal,
             String successCriteria,
             LocalDate startDate,
-            LocalDate endDate
+            LocalDate endDate,
+            String color
     ) {
         Project project = new Project();
         project.name = normalizeRequiredName(name);
@@ -78,6 +84,7 @@ public class Project {
         project.successCriteria = normalizeOptional(successCriteria, "성공 기준");
         project.startDate = startDate;
         project.endDate = endDate;
+        project.color = validateColor(color);
         project.status = ProjectStatus.IN_PROGRESS;
         validateDateRange(startDate, endDate);
         return project;
@@ -89,12 +96,14 @@ public class Project {
             String goal,
             String successCriteria,
             LocalDate startDate,
-            LocalDate endDate
+            LocalDate endDate,
+            String color
     ) {
         String normalizedName = normalizeRequiredName(name);
         String normalizedDescription = normalizeOptional(description, "프로젝트 설명");
         String normalizedGoal = normalizeOptional(goal, "프로젝트 목표");
         String normalizedSuccessCriteria = normalizeOptional(successCriteria, "성공 기준");
+        String normalizedColor = color == null ? this.color : validateColor(color);
         validateDateRange(startDate, endDate);
 
         this.name = normalizedName;
@@ -103,6 +112,7 @@ public class Project {
         this.successCriteria = normalizedSuccessCriteria;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.color = normalizedColor;
     }
 
     public void complete(LocalDateTime completedAt) {
@@ -173,5 +183,14 @@ public class Project {
             throw new IllegalArgumentException(fieldName + "은 2,000자를 초과할 수 없습니다.");
         }
         return normalized;
+    }
+
+    private static String validateColor(String color) {
+        if (color == null || !color.matches("^#[0-9A-Fa-f]{6}$")) {
+            throw new IllegalArgumentException(
+                    "프로젝트 색상은 #RRGGBB 형식이어야 합니다."
+            );
+        }
+        return color;
     }
 }

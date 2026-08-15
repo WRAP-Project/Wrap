@@ -69,6 +69,7 @@ class ProjectServiceTest {
         ProjectResponse response = projectService.create(1L, request);
 
         assertThat(response.getName()).isEqualTo("Wrap");
+        assertThat(response.getColor()).isEqualTo("#A78BFA");
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
 
         ArgumentCaptor<ProjectMember> ownerCaptor =
@@ -78,6 +79,7 @@ class ProjectServiceTest {
         ProjectMember owner = ownerCaptor.getValue();
         assertThat(owner.getMember()).isSameAs(member);
         assertThat(owner.getProject().getName()).isEqualTo("Wrap");
+        assertThat(owner.getProject().getColor()).isEqualTo("#A78BFA");
         assertThat(owner.isJoinedOwner()).isTrue();
         assertThat(owner.getJoinedAt()).isNotNull();
     }
@@ -151,6 +153,9 @@ class ProjectServiceTest {
         assertThat(responses)
                 .extracting(ProjectSummaryResponse::getStatus)
                 .containsOnly(ProjectStatus.IN_PROGRESS);
+        assertThat(responses)
+                .extracting(ProjectSummaryResponse::getColor)
+                .containsOnly(Project.DEFAULT_COLOR);
         verify(projectMemberRepository)
                 .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
                         1L,
@@ -205,6 +210,7 @@ class ProjectServiceTest {
         assertThat(response.getDescription()).isEqualTo("프로젝트 설명");
         assertThat(response.getGoal()).isEqualTo("프로젝트 목표");
         assertThat(response.getSuccessCriteria()).isEqualTo("성공 기준");
+        assertThat(response.getColor()).isEqualTo(Project.DEFAULT_COLOR);
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
         verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
@@ -289,6 +295,8 @@ class ProjectServiceTest {
         assertThat(response.getSuccessCriteria()).isEqualTo("Updated criteria");
         assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 1));
         assertThat(response.getEndDate()).isEqualTo(LocalDate.of(2026, 10, 31));
+        assertThat(response.getColor()).isEqualTo("#60C8F5");
+        assertThat(project.getColor()).isEqualTo("#60C8F5");
         verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
         verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -638,6 +646,7 @@ class ProjectServiceTest {
         ReflectionTestUtils.setField(request, "successCriteria", "성공 기준");
         ReflectionTestUtils.setField(request, "startDate", startDate);
         ReflectionTestUtils.setField(request, "endDate", endDate);
+        ReflectionTestUtils.setField(request, "color", "#A78BFA");
         return request;
     }
 
@@ -653,6 +662,7 @@ class ProjectServiceTest {
         ReflectionTestUtils.setField(request, "successCriteria", "Updated criteria");
         ReflectionTestUtils.setField(request, "startDate", startDate);
         ReflectionTestUtils.setField(request, "endDate", endDate);
+        ReflectionTestUtils.setField(request, "color", "#60C8F5");
         return request;
     }
 
@@ -663,7 +673,8 @@ class ProjectServiceTest {
                 "프로젝트 목표",
                 "성공 기준",
                 LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 8, 31)
+                LocalDate.of(2026, 8, 31),
+                Project.DEFAULT_COLOR
         );
         ReflectionTestUtils.setField(project, "id", id);
         return project;

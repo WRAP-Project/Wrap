@@ -18,6 +18,7 @@ class ProjectTest {
         Project project = createProject();
 
         assertEquals("Wrap", project.getName());
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
         assertEquals(ProjectStatus.IN_PROGRESS, project.getStatus());
         assertNull(project.getCompletedAt());
         assertNull(project.getDeletedAt());
@@ -31,7 +32,8 @@ class ProjectTest {
                 "",
                 null,
                 null,
-                null
+                null,
+                Project.DEFAULT_COLOR
         );
 
         assertNull(project.getDescription());
@@ -49,7 +51,39 @@ class ProjectTest {
                         null,
                         null,
                         LocalDate.of(2026, 8, 1),
-                        LocalDate.of(2026, 7, 31)
+                        LocalDate.of(2026, 7, 31),
+                        Project.DEFAULT_COLOR
+                )
+        );
+    }
+
+    @Test
+    void createWithSelectedColor() {
+        Project project = Project.create(
+                "Wrap",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "#A78BFA"
+        );
+
+        assertEquals("#A78BFA", project.getColor());
+    }
+
+    @Test
+    void createWithInvalidColorFails() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> Project.create(
+                        "Wrap",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "A78BFA"
                 )
         );
     }
@@ -66,7 +100,8 @@ class ProjectTest {
                         null,
                         null,
                         LocalDate.of(2026, 9, 1),
-                        LocalDate.of(2026, 8, 31)
+                        LocalDate.of(2026, 8, 31),
+                        "#A78BFA"
                 )
         );
 
@@ -74,6 +109,24 @@ class ProjectTest {
         assertEquals("프로젝트 설명", project.getDescription());
         assertEquals(LocalDate.of(2026, 7, 1), project.getStartDate());
         assertEquals(LocalDate.of(2026, 8, 31), project.getEndDate());
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
+    }
+
+    @Test
+    void 색상을_보내지_않고_수정하면_기존_색상을_유지한다() {
+        Project project = createProject();
+
+        project.update(
+                "변경된 이름",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
     }
 
     @Test
@@ -122,7 +175,8 @@ class ProjectTest {
                 "프로젝트 목표",
                 "성공 기준",
                 LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 8, 31)
+                LocalDate.of(2026, 8, 31),
+                Project.DEFAULT_COLOR
         );
     }
 }

@@ -613,7 +613,8 @@ class ProjectMemberServiceTest {
                 "Project goal",
                 "Success criteria",
                 LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 8, 31)
+                LocalDate.of(2026, 8, 31),
+                Project.DEFAULT_COLOR
         );
         ReflectionTestUtils.setField(project, "id", id);
         return project;
