@@ -35,6 +35,9 @@ class TestApiSwaggerTest {
                 .andExpect(jsonPath("$.paths['/schedules/me']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules']").exists())
                 .andExpect(jsonPath("$.paths['/schedules/{scheduleId}']").exists())
-                .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists());
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/invitations'].post").exists())
+                .andExpect(jsonPath("$.components.schemas.InvitationCreateRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.InvitationResponse").exists());
     }
 }
