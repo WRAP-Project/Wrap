@@ -45,6 +45,16 @@ public enum ErrorCode {
             "PROJECT_OWNER_CANNOT_BE_REMOVED",
             "A project owner cannot be removed."
     ),
+    PROJECT_MEMBER_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "PROJECT_MEMBER_ALREADY_EXISTS",
+            "The member is already participating in the project."
+    ),
+    INVITATION_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "INVITATION_ALREADY_EXISTS",
+            "An active invitation already exists."
+    ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email already exists."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Internal server error.");
