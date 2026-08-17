@@ -21,6 +21,7 @@ public class ProjectSummaryResponse {
     private ProjectStatus status;
     private LocalDate startDate;
     private LocalDate endDate;
+    private String color;
 
     public static ProjectSummaryResponse from(Project project) {
         return ProjectSummaryResponse.builder()
@@ -29,6 +30,7 @@ public class ProjectSummaryResponse {
                 .status(project.getStatus())
                 .startDate(project.getStartDate())
                 .endDate(project.getEndDate())
+                .color(project.getColor())
                 .build();
     }
 }

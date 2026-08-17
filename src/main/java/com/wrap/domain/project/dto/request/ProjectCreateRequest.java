@@ -1,6 +1,7 @@
 package com.wrap.domain.project.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import lombok.Getter;
@@ -26,4 +27,11 @@ public class ProjectCreateRequest {
     private LocalDate startDate;
 
     private LocalDate endDate;
+
+    @NotBlank(message = "프로젝트 색상은 필수입니다.")
+    @Pattern(
+            regexp = "^#[0-9A-Fa-f]{6}$",
+            message = "프로젝트 색상은 #RRGGBB 형식이어야 합니다."
+    )
+    private String color;
 }
