@@ -32,10 +32,12 @@ jobs:
           pip install -r .github/requirements.txt
 
       - name: Run AI Review
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.5-flash
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
         run: python .github/scripts/gemini-code-review.py
