@@ -9,6 +9,9 @@ import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -25,6 +28,9 @@ class InvitationRepositoryTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void 프로젝트와_초대_대상으로_활성_초대_존재_여부를_조회한다() {
@@ -70,9 +76,63 @@ class InvitationRepositoryTest {
         assertThat(exists).isFalse();
     }
 
+    @Test
+    void 초대_대상의_받은_초대_목록을_최신순으로_조회한다() {
+        Project oldProject = projectRepository.save(project("Old Project"));
+        Project newProject = projectRepository.save(project("New Project"));
+        Member inviter = memberRepository.save(member("owner@example.com", "owner"));
+        Member invitee = memberRepository.save(member("invitee@example.com", "invitee"));
+        Member otherInvitee = memberRepository.save(member("other@example.com", "other"));
+
+        Invitation oldInvitation = invitation(
+                oldProject,
+                inviter,
+                invitee
+        );
+        Invitation newInvitation = invitation(
+                newProject,
+                inviter,
+                invitee
+        );
+        Invitation otherInvitation = invitation(
+                newProject,
+                inviter,
+                otherInvitee
+        );
+        invitationRepository.saveAllAndFlush(List.of(
+                oldInvitation,
+                newInvitation,
+                otherInvitation
+        ));
+        updateCreatedAt(oldInvitation, LocalDateTime.of(2026, 8, 17, 10, 0));
+        updateCreatedAt(newInvitation, LocalDateTime.of(2026, 8, 18, 10, 0));
+        updateCreatedAt(otherInvitation, LocalDateTime.of(2026, 8, 19, 10, 0));
+        entityManager.clear();
+
+        List<Invitation> invitations =
+                invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(invitee.getId());
+
+        assertThat(invitations)
+                .extracting(Invitation::getProject)
+                .extracting(Project::getName)
+                .containsExactly("New Project", "Old Project");
+    }
+
+    @Test
+    void 받은_초대가_없으면_빈_목록을_반환한다() {
+        List<Invitation> invitations =
+                invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(999L);
+
+        assertThat(invitations).isEmpty();
+    }
+
     private Project project() {
+        return project("Wrap");
+    }
+
+    private Project project(String name) {
         return Project.create(
-                "Wrap",
+                name,
                 null,
                 null,
                 null,
@@ -88,5 +148,29 @@ class InvitationRepositoryTest {
                 .password("password1234")
                 .nickname(nickname)
                 .build();
+    }
+
+    private Invitation invitation(
+            Project project,
+            Member inviter,
+            Member invitee
+    ) {
+        return Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.MEMBER
+        );
+    }
+
+    private void updateCreatedAt(Invitation invitation, LocalDateTime createdAt) {
+        entityManager.createNativeQuery("""
+                        update invitation
+                        set created_at = :createdAt
+                        where id = :id
+                        """)
+                .setParameter("createdAt", createdAt)
+                .setParameter("id", invitation.getId())
+                .executeUpdate();
     }
 }

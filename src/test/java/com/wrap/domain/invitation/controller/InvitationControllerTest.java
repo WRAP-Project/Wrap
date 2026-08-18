@@ -7,12 +7,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.wrap.domain.invitation.dto.request.InvitationCreateRequest;
 import com.wrap.domain.invitation.dto.response.InvitationResponse;
+import com.wrap.domain.invitation.dto.response.ReceivedInvitationResponse;
 import com.wrap.domain.invitation.enums.InvitationStatus;
 import com.wrap.domain.invitation.service.InvitationService;
 import com.wrap.domain.member.entity.Member;
@@ -20,6 +22,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -38,6 +41,60 @@ class InvitationControllerTest {
 
     @MockitoBean
     private InvitationService invitationService;
+
+    @Test
+    void getReceivedInvitationsReturnsOkAndUsesAuthenticatedMemberId() throws Exception {
+        ReceivedInvitationResponse response = ReceivedInvitationResponse.builder()
+                .invitationId(100L)
+                .projectId(10L)
+                .projectName("Wrap")
+                .inviterNickname("owner")
+                .role(ProjectMemberRole.MEMBER)
+                .status(InvitationStatus.INVITED)
+                .createdAt(LocalDateTime.of(2026, 8, 18, 10, 0))
+                .build();
+        when(invitationService.getReceivedInvitations(1L)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/invitations")
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].invitationId").value(100))
+                .andExpect(jsonPath("$.data[0].projectId").value(10))
+                .andExpect(jsonPath("$.data[0].projectName").value("Wrap"))
+                .andExpect(jsonPath("$.data[0].inviterNickname").value("owner"))
+                .andExpect(jsonPath("$.data[0].role").value("MEMBER"))
+                .andExpect(jsonPath("$.data[0].status").value("INVITED"))
+                .andExpect(jsonPath("$.data[0].createdAt").value("2026-08-18T10:00:00"))
+                .andExpect(jsonPath("$.message")
+                        .value("Received project invitations retrieved."));
+
+        verify(invitationService).getReceivedInvitations(1L);
+    }
+
+    @Test
+    void getReceivedInvitationsReturnsEmptyList() throws Exception {
+        when(invitationService.getReceivedInvitations(1L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/invitations")
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(invitationService).getReceivedInvitations(1L);
+    }
+
+    @Test
+    void getReceivedInvitationsWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/invitations"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(invitationService);
+    }
 
     @Test
     void createReturnsCreatedAndUsesAuthenticatedMemberId() throws Exception {
