@@ -51,6 +51,7 @@ class ProjectControllerTest {
                 .name("Wrap")
                 .startDate(LocalDate.of(2026, 7, 1))
                 .endDate(LocalDate.of(2026, 8, 31))
+                .color("#CDEA6F")
                 .status(ProjectStatus.IN_PROGRESS)
                 .build();
         when(projectService.create(eq(1L), any(ProjectCreateRequest.class)))
@@ -65,6 +66,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(10))
                 .andExpect(jsonPath("$.data.name").value("Wrap"))
+                .andExpect(jsonPath("$.data.color").value("#CDEA6F"))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.message").value("Project created."));
 
@@ -95,13 +97,59 @@ class ProjectControllerTest {
                                   "name": " ",
                                   "description": "Project description",
                                   "startDate": "2026-07-01",
-                                  "endDate": "2026-08-31"
+                                  "endDate": "2026-08-31",
+                                  "color": "#CDEA6F"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void createWithoutColorReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/projects")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Wrap",
+                                  "description": "Project description",
+                                  "startDate": "2026-07-01",
+                                  "endDate": "2026-08-31"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("color"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void createWithInvalidColorReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/projects")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Wrap",
+                                  "description": "Project description",
+                                  "startDate": "2026-07-01",
+                                  "endDate": "2026-08-31",
+                                  "color": "CDEA6F"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("color"));
 
         verifyNoInteractions(projectService);
     }
@@ -115,6 +163,7 @@ class ProjectControllerTest {
                         .status(ProjectStatus.IN_PROGRESS)
                         .startDate(LocalDate.of(2026, 7, 1))
                         .endDate(LocalDate.of(2026, 8, 31))
+                        .color("#CDEA6F")
                         .build(),
                 ProjectSummaryResponse.builder()
                         .id(20L)
@@ -122,6 +171,7 @@ class ProjectControllerTest {
                         .status(ProjectStatus.COMPLETED)
                         .startDate(LocalDate.of(2026, 3, 1))
                         .endDate(LocalDate.of(2026, 6, 30))
+                        .color("#F5E03A")
                         .build()
         );
         when(projectService.getMyProjects(1L)).thenReturn(responses);
@@ -133,9 +183,11 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].id").value(10))
                 .andExpect(jsonPath("$.data[0].name").value("Wrap"))
+                .andExpect(jsonPath("$.data[0].color").value("#CDEA6F"))
                 .andExpect(jsonPath("$.data[0].status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.data[1].id").value(20))
                 .andExpect(jsonPath("$.data[1].name").value("Graduation"))
+                .andExpect(jsonPath("$.data[1].color").value("#F5E03A"))
                 .andExpect(jsonPath("$.data[1].status").value("COMPLETED"))
                 .andExpect(jsonPath("$.message").value("My projects retrieved."));
 
@@ -162,6 +214,7 @@ class ProjectControllerTest {
                 .successCriteria("Success criteria")
                 .startDate(LocalDate.of(2026, 7, 1))
                 .endDate(LocalDate.of(2026, 8, 31))
+                .color("#A78BFA")
                 .status(ProjectStatus.IN_PROGRESS)
                 .build();
         when(projectService.getProject(1L, 10L)).thenReturn(response);
@@ -175,6 +228,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.description").value("Project description"))
                 .andExpect(jsonPath("$.data.goal").value("Project goal"))
                 .andExpect(jsonPath("$.data.successCriteria").value("Success criteria"))
+                .andExpect(jsonPath("$.data.color").value("#A78BFA"))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.message").value("Project retrieved."));
 
@@ -201,6 +255,7 @@ class ProjectControllerTest {
                 .successCriteria("Updated criteria")
                 .startDate(LocalDate.of(2026, 9, 1))
                 .endDate(LocalDate.of(2026, 10, 31))
+                .color("#60C8F5")
                 .status(ProjectStatus.IN_PROGRESS)
                 .build();
         when(projectService.update(eq(1L), eq(10L), any(ProjectUpdateRequest.class)))
@@ -218,6 +273,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.description").value("Updated description"))
                 .andExpect(jsonPath("$.data.goal").value("Updated goal"))
                 .andExpect(jsonPath("$.data.successCriteria").value("Updated criteria"))
+                .andExpect(jsonPath("$.data.color").value("#60C8F5"))
                 .andExpect(jsonPath("$.message").value("Project updated."));
 
         verify(projectService).update(eq(1L), eq(10L), any(ProjectUpdateRequest.class));
@@ -254,6 +310,29 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void updateWithInvalidColorReturnsBadRequest() throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Updated Wrap",
+                                  "description": "Updated description",
+                                  "startDate": "2026-09-01",
+                                  "endDate": "2026-10-31",
+                                  "color": "A78BFA"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("color"));
 
         verifyNoInteractions(projectService);
     }
@@ -368,7 +447,8 @@ class ProjectControllerTest {
                   "goal": "Project goal",
                   "successCriteria": "Success criteria",
                   "startDate": "2026-07-01",
-                  "endDate": "2026-08-31"
+                  "endDate": "2026-08-31",
+                  "color": "#CDEA6F"
                 }
                 """;
     }
@@ -381,7 +461,8 @@ class ProjectControllerTest {
                   "goal": "Updated goal",
                   "successCriteria": "Updated criteria",
                   "startDate": "2026-09-01",
-                  "endDate": "2026-10-31"
+                  "endDate": "2026-10-31",
+                  "color": "#60C8F5"
                 }
                 """;
     }
