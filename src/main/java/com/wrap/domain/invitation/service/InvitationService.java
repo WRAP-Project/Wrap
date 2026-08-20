@@ -2,6 +2,7 @@ package com.wrap.domain.invitation.service;
 
 import com.wrap.domain.invitation.dto.request.InvitationCreateRequest;
 import com.wrap.domain.invitation.dto.response.InvitationResponse;
+import com.wrap.domain.invitation.dto.response.ReceivedInvitationResponse;
 import com.wrap.domain.invitation.entity.Invitation;
 import com.wrap.domain.invitation.enums.InvitationStatus;
 import com.wrap.domain.invitation.repository.InvitationRepository;
@@ -14,6 +15,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,14 @@ public class InvitationService {
     private final MemberRepository memberRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final InvitationRepository invitationRepository;
+
+    @Transactional(readOnly = true)
+    public List<ReceivedInvitationResponse> getReceivedInvitations(Long memberId) {
+        return invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(memberId)
+                .stream()
+                .map(ReceivedInvitationResponse::from)
+                .toList();
+    }
 
     @Transactional
     public InvitationResponse create(

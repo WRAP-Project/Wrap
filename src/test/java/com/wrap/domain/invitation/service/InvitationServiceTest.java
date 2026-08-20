@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.wrap.domain.invitation.dto.request.InvitationCreateRequest;
 import com.wrap.domain.invitation.dto.response.InvitationResponse;
+import com.wrap.domain.invitation.dto.response.ReceivedInvitationResponse;
 import com.wrap.domain.invitation.entity.Invitation;
 import com.wrap.domain.invitation.enums.InvitationStatus;
 import com.wrap.domain.invitation.repository.InvitationRepository;
@@ -24,6 +25,7 @@ import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +51,54 @@ class InvitationServiceTest {
 
     @InjectMocks
     private InvitationService invitationService;
+
+    @Test
+    void getReceivedInvitations_success() {
+        Project newProject = project(20L, "New Project");
+        Project oldProject = project(10L, "Old Project");
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        Invitation newInvitation = invitation(
+                200L,
+                newProject,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 18, 10, 0)
+        );
+        Invitation oldInvitation = invitation(
+                100L,
+                oldProject,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 17, 10, 0)
+        );
+        given(invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(2L))
+                .willReturn(List.of(newInvitation, oldInvitation));
+
+        List<ReceivedInvitationResponse> responses =
+                invitationService.getReceivedInvitations(2L);
+
+        assertThat(responses)
+                .extracting(ReceivedInvitationResponse::getInvitationId)
+                .containsExactly(200L, 100L);
+        assertThat(responses.get(0).getProjectName()).isEqualTo("New Project");
+        assertThat(responses.get(0).getInviterNickname()).isEqualTo("owner");
+        assertThat(responses.get(0).getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(responses.get(0).getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verify(invitationRepository).findAllByInviteeIdOrderByCreatedAtDesc(2L);
+    }
+
+    @Test
+    void getReceivedInvitations_empty() {
+        given(invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(2L))
+                .willReturn(List.of());
+
+        List<ReceivedInvitationResponse> responses =
+                invitationService.getReceivedInvitations(2L);
+
+        assertThat(responses).isEmpty();
+        verify(invitationRepository).findAllByInviteeIdOrderByCreatedAtDesc(2L);
+    }
 
     @Test
     void create_success() {
@@ -267,8 +317,12 @@ class InvitationServiceTest {
     }
 
     private Project project(Long id) {
+        return project(id, "Wrap");
+    }
+
+    private Project project(Long id, String name) {
         Project project = Project.create(
-                "Wrap",
+                name,
                 null,
                 null,
                 null,
@@ -278,6 +332,24 @@ class InvitationServiceTest {
         );
         ReflectionTestUtils.setField(project, "id", id);
         return project;
+    }
+
+    private Invitation invitation(
+            Long id,
+            Project project,
+            Member inviter,
+            Member invitee,
+            LocalDateTime createdAt
+    ) {
+        Invitation invitation = Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.MEMBER
+        );
+        ReflectionTestUtils.setField(invitation, "id", id);
+        ReflectionTestUtils.setField(invitation, "createdAt", createdAt);
+        return invitation;
     }
 
     private Member member(Long id, String email, String nickname) {
