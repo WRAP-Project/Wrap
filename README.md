@@ -2,6 +2,8 @@
 
 ### 필독
 - 모든 작업은 Repository를 로컬에 clone 하여 시작합니다.
+- Render 운영 배포 절차는 [배포 가이드](docs/render-deployment.md)를 확인합니다.
+
 ## 1. Git Convention
 
 ### 1.1 브랜치 전략
