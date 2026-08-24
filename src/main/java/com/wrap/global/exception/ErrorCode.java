@@ -35,7 +35,6 @@ public enum ErrorCode {
             "PROJECT_NOT_COMPLETED",
             "Only completed projects can be reopened."
     ),
-    TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "Task not found."),
     LAST_PROJECT_OWNER(
             HttpStatus.CONFLICT,
             "LAST_PROJECT_OWNER",

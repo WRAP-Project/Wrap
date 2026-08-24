@@ -8,10 +8,13 @@ import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
+import com.wrap.domain.schedule.dto.ScheduleDetailResponse;
 import com.wrap.domain.schedule.dto.ScheduleReminderResponse;
 import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
 import com.wrap.domain.schedule.entity.Schedule;
+import com.wrap.domain.schedule.entity.ScheduleCheck;
+import com.wrap.domain.schedule.repository.ScheduleCheckRepository;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
@@ -35,6 +38,7 @@ public class ScheduleService {
     private final MemberRepository memberRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final ScheduleCheckRepository scheduleCheckRepository;
 
     @Transactional
     public ScheduleResponse create(Long memberId, ScheduleCreateRequest request) {
@@ -85,6 +89,13 @@ public class ScheduleService {
                 .toList();
     }
 
+    public ScheduleDetailResponse findDetail(Long memberId, Long scheduleId) {
+        Schedule schedule = findSchedule(scheduleId);
+        validateScheduleReadable(memberId, schedule);
+
+        return ScheduleDetailResponse.from(schedule, isChecked(scheduleId, memberId));
+    }
+
     @Transactional
     public ScheduleResponse update(Long memberId, Long scheduleId, ScheduleUpdateRequest request) {
         Schedule schedule = findSchedule(scheduleId);
@@ -115,6 +126,30 @@ public class ScheduleService {
         Schedule schedule = findSchedule(scheduleId);
         validateScheduleWritable(memberId, schedule);
         scheduleRepository.delete(schedule);
+    }
+
+    @Transactional
+    public ScheduleDetailResponse check(Long memberId, Long scheduleId) {
+        Schedule schedule = findSchedule(scheduleId);
+        validateScheduleReadable(memberId, schedule);
+
+        if (!isChecked(scheduleId, memberId)) {
+            Member member = findMember(memberId);
+            scheduleCheckRepository.save(ScheduleCheck.create(schedule, member, LocalDateTime.now()));
+        }
+
+        return ScheduleDetailResponse.from(schedule, true);
+    }
+
+    @Transactional
+    public ScheduleDetailResponse uncheck(Long memberId, Long scheduleId) {
+        Schedule schedule = findSchedule(scheduleId);
+        validateScheduleReadable(memberId, schedule);
+
+        scheduleCheckRepository.findByScheduleIdAndMemberId(scheduleId, memberId)
+                .ifPresent(scheduleCheckRepository::delete);
+
+        return ScheduleDetailResponse.from(schedule, false);
     }
 
     public List<ScheduleReminderResponse> findReminders(Long memberId, Long projectId, Integer days, Integer limit) {
@@ -204,6 +239,20 @@ public class ScheduleService {
         }
     }
 
+    private void validateScheduleReadable(Long memberId, Schedule schedule) {
+        if (schedule.getCreator().getId().equals(memberId)) {
+            return;
+        }
+
+        Project project = schedule.getProject();
+        if (schedule.isShared() && project != null) {
+            validateJoinedProjectMember(memberId, project.getId());
+            return;
+        }
+
+        throw new CustomException(ErrorCode.FORBIDDEN);
+    }
+
     private void validateScheduleWritable(Long memberId, Schedule schedule) {
         if (schedule.getCreator().getId().equals(memberId)) {
             return;
@@ -215,6 +264,10 @@ public class ScheduleService {
         }
 
         throw new CustomException(ErrorCode.FORBIDDEN);
+    }
+
+    private boolean isChecked(Long scheduleId, Long memberId) {
+        return scheduleCheckRepository.existsByScheduleIdAndMemberId(scheduleId, memberId);
     }
 
     private boolean isProjectOwner(Long memberId, Long projectId) {

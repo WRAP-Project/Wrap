@@ -2,6 +2,7 @@ package com.wrap.domain.schedule.controller;
 
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
+import com.wrap.domain.schedule.dto.ScheduleDetailResponse;
 import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.service.ScheduleService;
 import com.wrap.global.security.MemberDetails;
@@ -23,6 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -76,6 +79,60 @@ class ScheduleControllerTest {
                 .andExpect(jsonPath("$.data.creatorId").value(1));
 
         verify(scheduleService).create(eq(1L), any(ScheduleCreateRequest.class));
+    }
+
+    @Test
+    void findDetailUsesAuthenticatedMemberId() throws Exception {
+        LocalDateTime startAt = LocalDateTime.of(2026, 7, 23, 14, 0);
+        LocalDateTime endAt = LocalDateTime.of(2026, 7, 23, 15, 0);
+        ScheduleDetailResponse response = new ScheduleDetailResponse(
+                1L,
+                null,
+                null,
+                1L,
+                "member",
+                "My schedule",
+                null,
+                startAt,
+                endAt,
+                false,
+                true
+        );
+        when(scheduleService.findDetail(1L, 1L)).thenReturn(response);
+
+        mockMvc.perform(get("/schedules/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.checked").value(true));
+
+        verify(scheduleService).findDetail(1L, 1L);
+    }
+
+    @Test
+    void checkScheduleUsesAuthenticatedMemberId() throws Exception {
+        LocalDateTime startAt = LocalDateTime.of(2026, 7, 23, 14, 0);
+        LocalDateTime endAt = LocalDateTime.of(2026, 7, 23, 15, 0);
+        ScheduleDetailResponse response = new ScheduleDetailResponse(
+                1L,
+                null,
+                null,
+                1L,
+                "member",
+                "My schedule",
+                null,
+                startAt,
+                endAt,
+                false,
+                true
+        );
+        when(scheduleService.check(1L, 1L)).thenReturn(response);
+
+        mockMvc.perform(patch("/schedules/1/check"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.checked").value(true));
+
+        verify(scheduleService).check(1L, 1L);
     }
 
     private HandlerMethodArgumentResolver memberDetailsResolver(Long memberId) {

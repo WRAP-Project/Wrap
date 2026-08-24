@@ -8,10 +8,13 @@ import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
+import com.wrap.domain.schedule.dto.ScheduleDetailResponse;
 import com.wrap.domain.schedule.dto.ScheduleReminderResponse;
 import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
 import com.wrap.domain.schedule.entity.Schedule;
+import com.wrap.domain.schedule.entity.ScheduleCheck;
+import com.wrap.domain.schedule.repository.ScheduleCheckRepository;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
@@ -38,6 +41,7 @@ class ScheduleServiceTest {
     private MemberRepository memberRepository;
     private ProjectRepository projectRepository;
     private ProjectMemberRepository projectMemberRepository;
+    private ScheduleCheckRepository scheduleCheckRepository;
     private ScheduleService scheduleService;
 
     @BeforeEach
@@ -46,11 +50,13 @@ class ScheduleServiceTest {
         memberRepository = mock(MemberRepository.class);
         projectRepository = mock(ProjectRepository.class);
         projectMemberRepository = mock(ProjectMemberRepository.class);
+        scheduleCheckRepository = mock(ScheduleCheckRepository.class);
         scheduleService = new ScheduleService(
                 scheduleRepository,
                 memberRepository,
                 projectRepository,
-                projectMemberRepository
+                projectMemberRepository,
+                scheduleCheckRepository
         );
     }
 
@@ -255,6 +261,123 @@ class ScheduleServiceTest {
                 any()
         );
         assertThat(schedule.getEndAt()).isAfter(nowCaptor.getValue());
+    }
+
+    @Test
+    void findDetailIncludesMyCheckedStatus() {
+        Member creator = member(1L);
+        Schedule schedule = new Schedule(
+                null,
+                creator,
+                "My schedule",
+                null,
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                false
+        );
+        ReflectionTestUtils.setField(schedule, "id", 1L);
+        when(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule));
+        when(scheduleCheckRepository.existsByScheduleIdAndMemberId(1L, 1L)).thenReturn(true);
+
+        ScheduleDetailResponse response = scheduleService.findDetail(1L, 1L);
+
+        assertThat(response.checked()).isTrue();
+        assertThat(response.title()).isEqualTo("My schedule");
+    }
+
+    @Test
+    void otherMemberCannotReadPrivateSchedule() {
+        Member creator = member(1L);
+        Schedule schedule = new Schedule(
+                null,
+                creator,
+                "Private schedule",
+                null,
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                false
+        );
+        ReflectionTestUtils.setField(schedule, "id", 1L);
+        when(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule));
+
+        assertThatThrownBy(() -> scheduleService.findDetail(2L, 1L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void joinedProjectMemberCanReadSharedScheduleDetail() {
+        Member creator = member(1L);
+        Project project = project(10L);
+        Schedule schedule = new Schedule(
+                project,
+                creator,
+                "Shared schedule",
+                null,
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                true
+        );
+        ReflectionTestUtils.setField(schedule, "id", 1L);
+        when(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule));
+        when(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
+                2L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).thenReturn(true);
+
+        ScheduleDetailResponse response = scheduleService.findDetail(2L, 1L);
+
+        assertThat(response.projectId()).isEqualTo(10L);
+        assertThat(response.shared()).isTrue();
+    }
+
+    @Test
+    void checkScheduleStoresMyCheckOnce() {
+        Member creator = member(1L);
+        Schedule schedule = new Schedule(
+                null,
+                creator,
+                "My schedule",
+                null,
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                false
+        );
+        ReflectionTestUtils.setField(schedule, "id", 1L);
+        when(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule));
+        when(scheduleCheckRepository.existsByScheduleIdAndMemberId(1L, 1L)).thenReturn(false);
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(creator));
+
+        ScheduleDetailResponse response = scheduleService.check(1L, 1L);
+
+        assertThat(response.checked()).isTrue();
+        verify(scheduleCheckRepository).save(any(ScheduleCheck.class));
+    }
+
+    @Test
+    void uncheckScheduleDeletesMyCheckIfExists() {
+        Member creator = member(1L);
+        Schedule schedule = new Schedule(
+                null,
+                creator,
+                "My schedule",
+                null,
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                false
+        );
+        ReflectionTestUtils.setField(schedule, "id", 1L);
+        ScheduleCheck scheduleCheck = ScheduleCheck.create(schedule, creator, LocalDateTime.now());
+        when(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule));
+        when(scheduleCheckRepository.findByScheduleIdAndMemberId(1L, 1L))
+                .thenReturn(Optional.of(scheduleCheck));
+
+        ScheduleDetailResponse response = scheduleService.uncheck(1L, 1L);
+
+        assertThat(response.checked()).isFalse();
+        verify(scheduleCheckRepository).delete(scheduleCheck);
     }
 
     private Member member(Long id) {
