@@ -22,6 +22,7 @@ public class ProjectResponse {
     private String successCriteria;
     private LocalDate startDate;
     private LocalDate endDate;
+    private String color;
     private ProjectStatus status;
     private LocalDateTime completedAt;
     private LocalDateTime createdAt;
@@ -36,6 +37,7 @@ public class ProjectResponse {
                 .successCriteria(project.getSuccessCriteria())
                 .startDate(project.getStartDate())
                 .endDate(project.getEndDate())
+                .color(project.getColor())
                 .status(project.getStatus())
                 .completedAt(project.getCompletedAt())
                 .createdAt(project.getCreatedAt())

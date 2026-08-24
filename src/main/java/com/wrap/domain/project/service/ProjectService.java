@@ -41,7 +41,8 @@ public class ProjectService {
                 request.getGoal(),
                 request.getSuccessCriteria(),
                 request.getStartDate(),
-                request.getEndDate()
+                request.getEndDate(),
+                request.getColor()
         );
         Project savedProject = projectRepository.save(project);
 
@@ -92,7 +93,8 @@ public class ProjectService {
                 request.getGoal(),
                 request.getSuccessCriteria(),
                 request.getStartDate(),
-                request.getEndDate()
+                request.getEndDate(),
+                request.getColor()
         );
 
         return ProjectResponse.from(project);

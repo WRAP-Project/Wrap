@@ -45,12 +45,15 @@ class TestApiSwaggerTest {
                 ).exists())
                 .andExpect(jsonPath(
                         "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/responses']"
-                ).exists())
+                ).exists())    
                 .andExpect(jsonPath(
                         "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/recommended-slots']"
                 ).exists())
                 .andExpect(jsonPath(
                         "$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}/confirm']"
-                ).exists());
+                ).exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/invitations'].post").exists())
+                .andExpect(jsonPath("$.components.schemas.InvitationCreateRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.InvitationResponse").exists());
     }
 }

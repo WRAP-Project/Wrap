@@ -208,7 +208,7 @@ class AvailabilityServiceTest {
     }
 
     private Project project(Long id) {
-        Project project = Project.create("Project", null, null, null, null, null);
+        Project project = Project.create("Project", null, null, null, null, null, Project.DEFAULT_COLOR);
         ReflectionTestUtils.setField(project, "id", id);
         return project;
     }

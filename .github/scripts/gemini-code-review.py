@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -8,12 +9,17 @@ from google import genai
 
 
 class GeminiCodeReview:
+    BATCH_SIZE = 4
+    MAX_REVIEW_FILES = 30
+    MIN_CALL_INTERVAL = 5.0
+
     def __init__(self):
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.pr_number = os.getenv("PR_NUMBER")
         self.repo = os.getenv("GITHUB_REPOSITORY")
         self.model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        self.last_call_at: Optional[float] = None
 
         self.priority = {
             "entity": 1,
@@ -104,15 +110,29 @@ class GeminiCodeReview:
             + "\n\n... diff가 길어 일부만 포함되었습니다. 위 범위 기준으로 파일 단위 요약 리뷰를 작성하세요."
         )
 
-    def build_prompt(self, file_path: str, code: str, category: str) -> str:
+    def build_batch_prompt(self, items: List[Tuple[str, str, str]]) -> str:
+        files_block = "\n\n".join(
+            f"""---
+리뷰 분류: {category}
+파일: {file_path}
+
+Diff:
+```diff
+{code}
+```"""
+            for file_path, code, category in items
+        )
+
         return f"""
 당신은 Wrap 프로젝트의 Spring Boot 백엔드 Pull Request를 리뷰하는 시니어 백엔드 개발자입니다.
 
 반드시 한국어로 답변하세요.
 리뷰 방식은 "전체 변경사항에 대한 파일 단위 요약 리뷰"입니다.
-아래 diff는 하나의 파일에 대한 변경사항입니다. 이 파일에서 무엇이 바뀌었고, 그 변경이 어떤 영향을 주는지 요약한 뒤 필요한 리뷰 의견만 작성하세요.
+아래에는 여러 파일의 diff가 `---`로 구분되어 이어져 있습니다. 각 파일마다 독립적으로 무엇이 바뀌었고, 그 변경이 어떤 영향을 주는지 요약한 뒤 필요한 리뷰 의견만 작성하세요.
 
-출력 형식은 반드시 아래 형식을 따르세요.
+각 파일마다 반드시 아래 형식을 반복해서 출력하세요. 파일 순서와 개수는 입력과 동일해야 합니다.
+
+### `파일 경로`
 
 **변경 요약**
 - 이 파일에서 바뀐 내용을 1~3개 bullet로 요약
@@ -133,6 +153,7 @@ class GeminiCodeReview:
 - 단순 칭찬은 작성하지 마세요.
 - 추측성 지적은 피하고 diff에서 근거가 보이는 내용만 작성하세요.
 - Java, Spring Boot, JPA, Spring Data Repository, Gradle 설정 관점에서 확인하세요.
+- 파일 간 내용을 섞지 말고, 각 파일은 자신의 diff만 근거로 리뷰하세요.
 
 프로젝트 컨텍스트:
 - Wrap은 단기 프로젝트 운영 플랫폼입니다.
@@ -140,34 +161,51 @@ class GeminiCodeReview:
 - Deliverable은 Task.deliverable로 표현합니다.
 - Task.assignee는 Member가 아니라 ProjectMember를 참조해야 합니다.
 
-리뷰 분류: {category}
-파일: {file_path}
+리뷰 대상 파일 목록:
 
-Diff:
-```diff
-{code}
-```
+{files_block}
 """
+
+    def extract_retry_delay(self, error: Exception) -> Optional[float]:
+        match = re.search(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)s", str(error))
+        if match:
+            return float(match.group(1))
+        return None
 
     def retry_with_backoff(self, func, max_retries: int = 5, base_delay: float = 1.0):
         for attempt in range(max_retries):
             try:
                 return func()
             except Exception as error:
-                is_retryable = "429" in str(error) or "503" in str(error) or "UNAVAILABLE" in str(error)
+                is_quota_exhausted = "429" in str(error) or "RESOURCE_EXHAUSTED" in str(error)
+                is_retryable = is_quota_exhausted or "503" in str(error) or "UNAVAILABLE" in str(error)
                 is_last = attempt == max_retries - 1
 
                 if not is_retryable or is_last:
                     raise
 
-                sleep_seconds = base_delay * (2**attempt) + random.uniform(0, 0.5)
+                if is_quota_exhausted:
+                    sleep_seconds = self.extract_retry_delay(error) or 60.0
+                else:
+                    sleep_seconds = base_delay * (2**attempt) + random.uniform(0, 0.5)
+
                 print(f"Gemini request retry in {sleep_seconds:.2f}s ({attempt + 1}/{max_retries})")
                 time.sleep(sleep_seconds)
+
+    def throttle(self):
+        if self.last_call_at is not None:
+            elapsed = time.monotonic() - self.last_call_at
+            wait = self.MIN_CALL_INTERVAL - elapsed
+            if wait > 0:
+                time.sleep(wait)
+
+        self.last_call_at = time.monotonic()
 
     def call_gemini(self, prompt: str) -> str:
         client = genai.Client(api_key=self.api_key)
 
         def request():
+            self.throttle()
             response = client.models.generate_content(
                 model=self.model,
                 contents=prompt,
@@ -199,15 +237,32 @@ Diff:
     def run(self):
         print("Starting Gemini file summary review")
 
-        reviews = []
+        targets = []
         for category, file in self.get_review_targets():
             diff = self.extract_file_diff(file.get("patch"))
             if not diff.strip():
                 continue
+            targets.append((file["filename"], diff, category))
 
-            prompt = self.build_prompt(file["filename"], diff, category)
-            review = self.call_gemini(prompt)
-            reviews.append(f"### `{file['filename']}`\n\n{review}")
+        skipped_count = max(0, len(targets) - self.MAX_REVIEW_FILES)
+        targets = targets[: self.MAX_REVIEW_FILES]
+
+        reviews = []
+        for i in range(0, len(targets), self.BATCH_SIZE):
+            batch = targets[i : i + self.BATCH_SIZE]
+            batch_names = [file_path for file_path, _, _ in batch]
+
+            try:
+                prompt = self.build_batch_prompt(batch)
+                review = self.call_gemini(prompt)
+                reviews.append(review)
+            except Exception as error:
+                print(f"Gemini batch review failed for {batch_names}: {error}")
+                failed_list = "\n".join(f"- `{name}`" for name in batch_names)
+                reviews.append(f"⚠️ 아래 파일들은 리뷰 생성에 실패했습니다.\n\n{failed_list}")
+
+        if skipped_count:
+            reviews.append(f"⚠️ 파일 수가 많아 {skipped_count}개 파일은 리뷰가 생략되었습니다.")
 
         if reviews:
             self.create_review_comment("\n\n".join(reviews))
