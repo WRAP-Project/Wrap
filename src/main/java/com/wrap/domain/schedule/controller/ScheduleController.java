@@ -1,6 +1,7 @@
 package com.wrap.domain.schedule.controller;
 
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
+import com.wrap.domain.schedule.dto.ScheduleDetailResponse;
 import com.wrap.domain.schedule.dto.ScheduleReminderResponse;
 import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
@@ -68,6 +69,17 @@ public class ScheduleController {
         );
     }
 
+    @GetMapping("/schedules/{scheduleId}")
+    public ApiResponse<ScheduleDetailResponse> findDetail(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long scheduleId
+    ) {
+        return ApiResponse.success(
+                scheduleService.findDetail(memberDetails.getMemberId(), scheduleId),
+                "Schedule detail retrieved."
+        );
+    }
+
     @PatchMapping("/schedules/{scheduleId}")
     public ApiResponse<ScheduleResponse> update(
             @AuthenticationPrincipal MemberDetails memberDetails,
@@ -87,6 +99,28 @@ public class ScheduleController {
     ) {
         scheduleService.delete(memberDetails.getMemberId(), scheduleId);
         return ApiResponse.success("Schedule deleted.");
+    }
+
+    @PatchMapping("/schedules/{scheduleId}/check")
+    public ApiResponse<ScheduleDetailResponse> check(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long scheduleId
+    ) {
+        return ApiResponse.success(
+                scheduleService.check(memberDetails.getMemberId(), scheduleId),
+                "Schedule checked."
+        );
+    }
+
+    @PatchMapping("/schedules/{scheduleId}/uncheck")
+    public ApiResponse<ScheduleDetailResponse> uncheck(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long scheduleId
+    ) {
+        return ApiResponse.success(
+                scheduleService.uncheck(memberDetails.getMemberId(), scheduleId),
+                "Schedule unchecked."
+        );
     }
 
     @GetMapping("/projects/{projectId}/schedules/reminders")

@@ -11,6 +11,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -34,6 +35,16 @@ public class GlobalExceptionHandler {
                 ErrorCode.VALIDATION_FAILED.getCode(),
                 ErrorCode.VALIDATION_FAILED.getMessage(),
                 fieldErrors
+        );
+        return ResponseEntity.badRequest().body(ApiResponse.fail(errorBody));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<?>> handleTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        ErrorBody errorBody = new ErrorBody(
+                ErrorCode.INVALID_REQUEST.getCode(),
+                ErrorCode.INVALID_REQUEST.getMessage(),
+                List.of(new FieldError(e.getName(), "Request parameter type is invalid."))
         );
         return ResponseEntity.badRequest().body(ApiResponse.fail(errorBody));
     }
