@@ -10,6 +10,7 @@ import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -124,6 +125,28 @@ class InvitationRepositoryTest {
                 invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(999L);
 
         assertThat(invitations).isEmpty();
+    }
+
+    @Test
+    void 초대_ID로_수락_대상을_잠금_조회한다() {
+        Project project = projectRepository.save(project());
+        Member inviter = memberRepository.save(member("owner@example.com", "owner"));
+        Member invitee = memberRepository.save(member("member@example.com", "member"));
+        Invitation savedInvitation = invitationRepository.saveAndFlush(Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.MEMBER
+        ));
+        entityManager.clear();
+
+        Invitation invitation = invitationRepository.findByIdForUpdate(savedInvitation.getId())
+                .orElseThrow();
+
+        assertThat(invitation.getProject().getId()).isEqualTo(project.getId());
+        assertThat(invitation.getInvitee().getId()).isEqualTo(invitee.getId());
+        assertThat(entityManager.getLockMode(invitation))
+                .isEqualTo(LockModeType.PESSIMISTIC_WRITE);
     }
 
     private Project project() {

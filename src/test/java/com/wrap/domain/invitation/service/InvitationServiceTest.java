@@ -29,6 +29,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -294,6 +297,185 @@ class InvitationServiceTest {
         );
 
         verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    void accept_success_newProjectMember() {
+        Project project = project(10L);
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        Invitation invitation = invitation(
+                100L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.empty());
+
+        InvitationResponse response = invitationService.accept(2L, 100L);
+
+        ArgumentCaptor<ProjectMember> projectMemberCaptor =
+                ArgumentCaptor.forClass(ProjectMember.class);
+        verify(projectMemberRepository).save(projectMemberCaptor.capture());
+        ProjectMember savedProjectMember = projectMemberCaptor.getValue();
+        assertThat(savedProjectMember.getMember()).isSameAs(invitee);
+        assertThat(savedProjectMember.getProject()).isSameAs(project);
+        assertThat(savedProjectMember.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(savedProjectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+        assertThat(savedProjectMember.getJoinedAt()).isNotNull();
+        assertThat(response.getInvitationId()).isEqualTo(100L);
+        assertThat(response.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+    }
+
+    @Test
+    void accept_success_rejoinLeftProjectMember() {
+        Project project = project(10L);
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        Invitation invitation = invitation(
+                100L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        LocalDateTime previousJoinedAt = LocalDateTime.of(2026, 8, 1, 10, 0);
+        ProjectMember leftProjectMember = ProjectMember.join(
+                invitee,
+                project,
+                ProjectMemberRole.OWNER,
+                previousJoinedAt
+        );
+        leftProjectMember.leave();
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.of(leftProjectMember));
+
+        InvitationResponse response = invitationService.accept(2L, 100L);
+
+        assertThat(leftProjectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+        assertThat(leftProjectMember.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(leftProjectMember.getJoinedAt()).isAfter(previousJoinedAt);
+        assertThat(response.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        verify(projectMemberRepository, never()).save(any(ProjectMember.class));
+    }
+
+    @Test
+    void accept_invitationNotFound() {
+        given(invitationRepository.findByIdForUpdate(100L)).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.INVITATION_NOT_FOUND
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void accept_accessDenied() {
+        Invitation invitation = invitationForAccept();
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.accept(3L, 100L),
+                ErrorCode.INVITATION_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = InvitationStatus.class,
+            names = {"ACCEPTED", "REJECTED", "CANCELED"}
+    )
+    void accept_alreadyProcessed(InvitationStatus status) {
+        Invitation invitation = invitationForAccept();
+        ReflectionTestUtils.setField(invitation, "status", status);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.INVITATION_ALREADY_PROCESSED
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+        assertThat(invitation.getStatus()).isEqualTo(status);
+    }
+
+    @Test
+    void accept_deletedProject() {
+        Invitation invitation = invitationForAccept();
+        invitation.getProject().softDelete(LocalDateTime.of(2026, 8, 22, 11, 0));
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.PROJECT_NOT_FOUND
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @Test
+    void accept_completedProject() {
+        Invitation invitation = invitationForAccept();
+        invitation.getProject().complete(LocalDateTime.of(2026, 8, 22, 11, 0));
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.PROJECT_ALREADY_COMPLETED
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @Test
+    void accept_projectMemberAlreadyExists() {
+        Invitation invitation = invitationForAccept();
+        ProjectMember joinedProjectMember = ProjectMember.join(
+                invitation.getInvitee(),
+                invitation.getProject(),
+                ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 8, 1, 10, 0)
+        );
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.of(joinedProjectMember));
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS
+        );
+
+        verify(projectMemberRepository, never()).save(any(ProjectMember.class));
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    private Invitation invitationForAccept() {
+        return invitation(
+                100L,
+                project(10L),
+                member(1L, "owner@example.com", "owner"),
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
     }
 
     private void givenProjectAndRequester(Project project, ProjectMember projectMember) {

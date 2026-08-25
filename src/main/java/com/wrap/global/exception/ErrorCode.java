@@ -55,6 +55,21 @@ public enum ErrorCode {
             "INVITATION_ALREADY_EXISTS",
             "An active invitation already exists."
     ),
+    INVITATION_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "INVITATION_NOT_FOUND",
+            "Invitation not found."
+    ),
+    INVITATION_ACCESS_DENIED(
+            HttpStatus.FORBIDDEN,
+            "INVITATION_ACCESS_DENIED",
+            "Invitation access is denied."
+    ),
+    INVITATION_ALREADY_PROCESSED(
+            HttpStatus.CONFLICT,
+            "INVITATION_ALREADY_PROCESSED",
+            "Invitation has already been processed."
+    ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
     AVAILABILITY_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,

@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +50,18 @@ public class InvitationController {
         return ApiResponse.success(
                 invitationService.create(memberDetails.getMemberId(), projectId, request),
                 "Project invitation created."
+        );
+    }
+
+    @Operation(summary = "프로젝트 초대 수락")
+    @PatchMapping("/invitations/{invitationId}/accept")
+    public ApiResponse<InvitationResponse> accept(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long invitationId
+    ) {
+        return ApiResponse.success(
+                invitationService.accept(memberDetails.getMemberId(), invitationId),
+                "Project invitation accepted."
         );
     }
 }
