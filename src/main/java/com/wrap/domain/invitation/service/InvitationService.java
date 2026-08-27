@@ -15,6 +15,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,63 @@ public class InvitationService {
         );
 
         return InvitationResponse.from(invitationRepository.save(invitation));
+    }
+
+    @Transactional
+    public InvitationResponse accept(Long memberId, Long invitationId) {
+        Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+
+        validateInvitee(memberId, invitation);
+        validateInvitationPending(invitation);
+        validateProjectAvailable(invitation.getProject());
+        joinProject(invitation);
+        invitation.accept();
+
+        return InvitationResponse.from(invitation);
+    }
+
+    private void validateInvitee(Long memberId, Invitation invitation) {
+        if (!invitation.getInvitee().getId().equals(memberId)) {
+            throw new CustomException(ErrorCode.INVITATION_ACCESS_DENIED);
+        }
+    }
+
+    private void validateInvitationPending(Invitation invitation) {
+        if (invitation.getStatus() != InvitationStatus.INVITED) {
+            throw new CustomException(ErrorCode.INVITATION_ALREADY_PROCESSED);
+        }
+    }
+
+    private void validateProjectAvailable(Project project) {
+        if (project.isDeleted()) {
+            throw new CustomException(ErrorCode.PROJECT_NOT_FOUND);
+        }
+        validateProjectInProgress(project);
+    }
+
+    private void joinProject(Invitation invitation) {
+        Project project = invitation.getProject();
+        Member invitee = invitation.getInvitee();
+        LocalDateTime joinedAt = LocalDateTime.now();
+
+        projectMemberRepository.findByMemberIdAndProjectId(invitee.getId(), project.getId())
+                .ifPresentOrElse(
+                        projectMember -> {
+                            if (projectMember.getStatus() != ProjectMemberStatus.LEFT) {
+                                throw new CustomException(
+                                        ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS
+                                );
+                            }
+                            projectMember.rejoin(invitation.getRole(), joinedAt);
+                        },
+                        () -> projectMemberRepository.save(ProjectMember.join(
+                                invitee,
+                                project,
+                                invitation.getRole(),
+                                joinedAt
+                        ))
+                );
     }
 
     private Project findActiveProject(Long projectId) {

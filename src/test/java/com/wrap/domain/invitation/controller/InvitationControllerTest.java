@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -204,6 +205,50 @@ class InvitationControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.error.details[0].field").value("role"));
+
+        verifyNoInteractions(invitationService);
+    }
+
+    @Test
+    void acceptReturnsOkAndUsesAuthenticatedMemberId() throws Exception {
+        InvitationResponse response = InvitationResponse.builder()
+                .invitationId(100L)
+                .projectId(10L)
+                .projectName("Wrap")
+                .inviteeMemberId(2L)
+                .inviteeEmail("invitee@example.com")
+                .role(ProjectMemberRole.MEMBER)
+                .status(InvitationStatus.ACCEPTED)
+                .createdAt(LocalDateTime.of(2026, 8, 22, 10, 0))
+                .build();
+        when(invitationService.accept(2L, 100L)).thenReturn(response);
+
+        mockMvc.perform(patch("/invitations/100/accept")
+                        .with(user(memberDetails(2L)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.invitationId").value(100))
+                .andExpect(jsonPath("$.data.projectId").value(10))
+                .andExpect(jsonPath("$.data.projectName").value("Wrap"))
+                .andExpect(jsonPath("$.data.inviteeMemberId").value(2))
+                .andExpect(jsonPath("$.data.inviteeEmail")
+                        .value("invitee@example.com"))
+                .andExpect(jsonPath("$.data.role").value("MEMBER"))
+                .andExpect(jsonPath("$.data.status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Project invitation accepted."));
+
+        verify(invitationService).accept(2L, 100L);
+    }
+
+    @Test
+    void acceptWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(patch("/invitations/100/accept")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(invitationService);
     }

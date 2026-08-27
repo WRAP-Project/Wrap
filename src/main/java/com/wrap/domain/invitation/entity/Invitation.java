@@ -70,6 +70,14 @@ public class Invitation {
         return invitation;
     }
 
+    public void accept() {
+        if (status != InvitationStatus.INVITED) {
+            throw new IllegalStateException("대기 중인 초대만 수락할 수 있습니다.");
+        }
+
+        this.status = InvitationStatus.ACCEPTED;
+    }
+
     private static Project requireProject(Project project) {
         if (project == null) {
             throw new IllegalArgumentException("프로젝트는 필수입니다.");

@@ -71,6 +71,35 @@ class InvitationTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 초대를_수락하면_ACCEPTED_상태가_된다() {
+        Invitation invitation = invitation();
+
+        invitation.accept();
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+    }
+
+    @Test
+    void 이미_처리된_초대는_수락할_수_없다() {
+        Invitation invitation = invitation();
+        invitation.accept();
+
+        assertThatThrownBy(invitation::accept)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("대기 중인 초대만 수락할 수 있습니다.");
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+    }
+
+    private Invitation invitation() {
+        return Invitation.create(
+                project(),
+                member("owner@example.com", "owner"),
+                member("member@example.com", "member"),
+                ProjectMemberRole.MEMBER
+        );
+    }
+
     private Project project() {
         return Project.create(
                 "Wrap",
