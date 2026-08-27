@@ -78,6 +78,22 @@ public class Invitation {
         this.status = InvitationStatus.ACCEPTED;
     }
 
+    public void reject() {
+        if (status != InvitationStatus.INVITED) {
+            throw new IllegalStateException("대기 중인 초대만 거절할 수 있습니다.");
+        }
+
+        this.status = InvitationStatus.REJECTED;
+    }
+
+    public void cancel() {
+        if (status != InvitationStatus.INVITED) {
+            throw new IllegalStateException("대기 중인 초대만 취소할 수 있습니다.");
+        }
+
+        this.status = InvitationStatus.CANCELED;
+    }
+
     private static Project requireProject(Project project) {
         if (project == null) {
             throw new IllegalArgumentException("프로젝트는 필수입니다.");

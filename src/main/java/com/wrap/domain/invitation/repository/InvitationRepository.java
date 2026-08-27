@@ -22,6 +22,9 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
     @EntityGraph(attributePaths = {"project", "inviter"})
     List<Invitation> findAllByInviteeIdOrderByCreatedAtDesc(Long inviteeId);
 
+    @EntityGraph(attributePaths = {"project", "invitee"})
+    List<Invitation> findAllByProjectIdOrderByCreatedAtDesc(Long projectId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"project", "invitee"})
     @Query("select invitation from Invitation invitation where invitation.id = :invitationId")

@@ -128,6 +128,45 @@ class InvitationRepositoryTest {
     }
 
     @Test
+    void 프로젝트의_보낸_초대_목록을_최신순으로_조회한다() {
+        Project project = projectRepository.save(project("Wrap"));
+        Project otherProject = projectRepository.save(project("Other Project"));
+        Member inviter = memberRepository.save(member("owner@example.com", "owner"));
+        Member oldInvitee = memberRepository.save(member("old@example.com", "old"));
+        Member newInvitee = memberRepository.save(member("new@example.com", "new"));
+        Member otherInvitee = memberRepository.save(member("other@example.com", "other"));
+
+        Invitation oldInvitation = invitation(project, inviter, oldInvitee);
+        Invitation newInvitation = invitation(project, inviter, newInvitee);
+        Invitation otherInvitation = invitation(otherProject, inviter, otherInvitee);
+        invitationRepository.saveAllAndFlush(List.of(
+                oldInvitation,
+                newInvitation,
+                otherInvitation
+        ));
+        updateCreatedAt(oldInvitation, LocalDateTime.of(2026, 8, 17, 10, 0));
+        updateCreatedAt(newInvitation, LocalDateTime.of(2026, 8, 18, 10, 0));
+        updateCreatedAt(otherInvitation, LocalDateTime.of(2026, 8, 19, 10, 0));
+        entityManager.clear();
+
+        List<Invitation> invitations =
+                invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(project.getId());
+
+        assertThat(invitations)
+                .extracting(Invitation::getInvitee)
+                .extracting(Member::getEmail)
+                .containsExactly("new@example.com", "old@example.com");
+    }
+
+    @Test
+    void 프로젝트에서_보낸_초대가_없으면_빈_목록을_반환한다() {
+        List<Invitation> invitations =
+                invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(999L);
+
+        assertThat(invitations).isEmpty();
+    }
+
+    @Test
     void 초대_ID로_수락_대상을_잠금_조회한다() {
         Project project = projectRepository.save(project());
         Member inviter = memberRepository.save(member("owner@example.com", "owner"));
