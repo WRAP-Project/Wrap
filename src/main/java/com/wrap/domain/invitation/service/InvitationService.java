@@ -38,6 +38,16 @@ public class InvitationService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<InvitationResponse> getSentInvitations(Long memberId, Long projectId) {
+        findProjectForOwner(memberId, projectId);
+
+        return invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId)
+                .stream()
+                .map(InvitationResponse::from)
+                .toList();
+    }
+
     @Transactional
     public InvitationResponse create(
             Long memberId,
@@ -65,16 +75,53 @@ public class InvitationService {
 
     @Transactional
     public InvitationResponse accept(Long memberId, Long invitationId) {
-        Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
-
-        validateInvitee(memberId, invitation);
-        validateInvitationPending(invitation);
-        validateProjectAvailable(invitation.getProject());
+        Invitation invitation = findPendingInvitationForInvitee(memberId, invitationId);
         joinProject(invitation);
         invitation.accept();
 
         return InvitationResponse.from(invitation);
+    }
+
+    @Transactional
+    public InvitationResponse reject(Long memberId, Long invitationId) {
+        Invitation invitation = findPendingInvitationForInvitee(memberId, invitationId);
+        invitation.reject();
+
+        return InvitationResponse.from(invitation);
+    }
+
+    @Transactional
+    public void cancel(Long memberId, Long projectId, Long invitationId) {
+        Project project = findProjectForOwner(memberId, projectId);
+        validateProjectInProgress(project);
+
+        Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+        validateInvitationProject(projectId, invitation);
+        validateInvitationPending(invitation);
+        invitation.cancel();
+    }
+
+    private Project findProjectForOwner(Long memberId, Long projectId) {
+        Project project = findActiveProject(projectId);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        validateOwner(projectMember);
+        return project;
+    }
+
+    private Invitation findPendingInvitationForInvitee(Long memberId, Long invitationId) {
+        Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+        validateInvitee(memberId, invitation);
+        validateInvitationPending(invitation);
+        validateProjectAvailable(invitation.getProject());
+        return invitation;
+    }
+
+    private void validateInvitationProject(Long projectId, Invitation invitation) {
+        if (!invitation.getProject().getId().equals(projectId)) {
+            throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
+        }
     }
 
     private void validateInvitee(Long memberId, Invitation invitation) {

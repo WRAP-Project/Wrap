@@ -104,6 +104,109 @@ class InvitationServiceTest {
     }
 
     @Test
+    void getSentInvitations_success() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        Member newInvitee = member(2L, "new@example.com", "new");
+        Member oldInvitee = member(3L, "old@example.com", "old");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation newInvitation = invitation(
+                200L,
+                project,
+                ownerMember,
+                newInvitee,
+                LocalDateTime.of(2026, 8, 18, 10, 0)
+        );
+        Invitation oldInvitation = invitation(
+                100L,
+                project,
+                ownerMember,
+                oldInvitee,
+                LocalDateTime.of(2026, 8, 17, 10, 0)
+        );
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(10L))
+                .willReturn(List.of(newInvitation, oldInvitation));
+
+        List<InvitationResponse> responses =
+                invitationService.getSentInvitations(1L, 10L);
+
+        assertThat(responses)
+                .extracting(InvitationResponse::getInvitationId)
+                .containsExactly(200L, 100L);
+        assertThat(responses.get(0).getProjectId()).isEqualTo(10L);
+        assertThat(responses.get(0).getInviteeMemberId()).isEqualTo(2L);
+        assertThat(responses.get(0).getInviteeEmail()).isEqualTo("new@example.com");
+        assertThat(responses.get(0).getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verify(invitationRepository).findAllByProjectIdOrderByCreatedAtDesc(10L);
+    }
+
+    @Test
+    void getSentInvitations_empty() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(10L))
+                .willReturn(List.of());
+
+        List<InvitationResponse> responses =
+                invitationService.getSentInvitations(1L, 10L);
+
+        assertThat(responses).isEmpty();
+        verify(invitationRepository).findAllByProjectIdOrderByCreatedAtDesc(10L);
+    }
+
+    @Test
+    void getSentInvitations_projectNotFound() {
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.getSentInvitations(1L, 10L),
+                ErrorCode.PROJECT_NOT_FOUND
+        );
+
+        verifyNoInteractions(projectMemberRepository, invitationRepository);
+    }
+
+    @Test
+    void getSentInvitations_accessDenied() {
+        Project project = project(10L);
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.getSentInvitations(1L, 10L),
+                ErrorCode.PROJECT_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    @Test
+    void getSentInvitations_ownerRequired() {
+        Project project = project(10L);
+        Member member = member(1L, "member@example.com", "member");
+        ProjectMember projectMember = projectMember(
+                member,
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        givenProjectAndRequester(project, projectMember);
+
+        assertError(
+                () -> invitationService.getSentInvitations(1L, 10L),
+                ErrorCode.PROJECT_OWNER_REQUIRED
+        );
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    @Test
     void create_success() {
         Project project = project(10L);
         Member inviter = member(1L, "owner@example.com", "owner");
@@ -466,6 +569,252 @@ class InvitationServiceTest {
 
         verify(projectMemberRepository, never()).save(any(ProjectMember.class));
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @Test
+    void reject_success() {
+        Invitation invitation = invitationForAccept();
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        InvitationResponse response = invitationService.reject(2L, 100L);
+
+        assertThat(response.getInvitationId()).isEqualTo(100L);
+        assertThat(response.getStatus()).isEqualTo(InvitationStatus.REJECTED);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.REJECTED);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void reject_invitationNotFound() {
+        given(invitationRepository.findByIdForUpdate(100L)).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.reject(2L, 100L),
+                ErrorCode.INVITATION_NOT_FOUND
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void reject_accessDenied() {
+        Invitation invitation = invitationForAccept();
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.reject(3L, 100L),
+                ErrorCode.INVITATION_ACCESS_DENIED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = InvitationStatus.class,
+            names = {"ACCEPTED", "REJECTED", "CANCELED"}
+    )
+    void reject_alreadyProcessed(InvitationStatus status) {
+        Invitation invitation = invitationForAccept();
+        ReflectionTestUtils.setField(invitation, "status", status);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.reject(2L, 100L),
+                ErrorCode.INVITATION_ALREADY_PROCESSED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(status);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void reject_deletedProject() {
+        Invitation invitation = invitationForAccept();
+        invitation.getProject().softDelete(LocalDateTime.of(2026, 8, 22, 11, 0));
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.reject(2L, 100L),
+                ErrorCode.PROJECT_NOT_FOUND
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void reject_completedProject() {
+        Invitation invitation = invitationForAccept();
+        invitation.getProject().complete(LocalDateTime.of(2026, 8, 22, 11, 0));
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.reject(2L, 100L),
+                ErrorCode.PROJECT_ALREADY_COMPLETED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void cancel_success() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation invitation = invitation(
+                100L,
+                project,
+                ownerMember,
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        invitationService.cancel(1L, 10L, 100L);
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.CANCELED);
+    }
+
+    @Test
+    void cancel_projectNotFound() {
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.PROJECT_NOT_FOUND
+        );
+
+        verifyNoInteractions(projectMemberRepository, invitationRepository);
+    }
+
+    @Test
+    void cancel_accessDenied() {
+        Project project = project(10L);
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.PROJECT_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    @Test
+    void cancel_ownerRequired() {
+        Project project = project(10L);
+        Member member = member(1L, "member@example.com", "member");
+        ProjectMember projectMember = projectMember(
+                member,
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        givenProjectAndRequester(project, projectMember);
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.PROJECT_OWNER_REQUIRED
+        );
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    @Test
+    void cancel_completedProject() {
+        Project project = project(10L);
+        project.complete(LocalDateTime.of(2026, 8, 22, 11, 0));
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        givenProjectAndRequester(project, owner);
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.PROJECT_ALREADY_COMPLETED
+        );
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    @Test
+    void cancel_invitationNotFound() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findByIdForUpdate(100L)).willReturn(Optional.empty());
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.INVITATION_NOT_FOUND
+        );
+    }
+
+    @Test
+    void cancel_invitationBelongsToDifferentProject() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation invitation = invitation(
+                100L,
+                project(20L, "Other Project"),
+                ownerMember,
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.INVITATION_NOT_FOUND
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = InvitationStatus.class,
+            names = {"ACCEPTED", "REJECTED", "CANCELED"}
+    )
+    void cancel_alreadyProcessed(InvitationStatus status) {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation invitation = invitation(
+                100L,
+                project,
+                ownerMember,
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        ReflectionTestUtils.setField(invitation, "status", status);
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.INVITATION_ALREADY_PROCESSED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(status);
     }
 
     private Invitation invitationForAccept() {

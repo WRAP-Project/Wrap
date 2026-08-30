@@ -13,6 +13,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +37,18 @@ public class InvitationController {
         return ApiResponse.success(
                 invitationService.getReceivedInvitations(memberDetails.getMemberId()),
                 "Received project invitations retrieved."
+        );
+    }
+
+    @Operation(summary = "보낸 프로젝트 초대 목록 조회")
+    @GetMapping("/projects/{projectId}/invitations")
+    public ApiResponse<List<InvitationResponse>> getSentInvitations(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId
+    ) {
+        return ApiResponse.success(
+                invitationService.getSentInvitations(memberDetails.getMemberId(), projectId),
+                "Sent project invitations retrieved."
         );
     }
 
@@ -63,5 +76,32 @@ public class InvitationController {
                 invitationService.accept(memberDetails.getMemberId(), invitationId),
                 "Project invitation accepted."
         );
+    }
+
+    @Operation(summary = "프로젝트 초대 거절")
+    @PatchMapping("/invitations/{invitationId}/reject")
+    public ApiResponse<InvitationResponse> reject(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long invitationId
+    ) {
+        return ApiResponse.success(
+                invitationService.reject(memberDetails.getMemberId(), invitationId),
+                "Project invitation rejected."
+        );
+    }
+
+    @Operation(summary = "보낸 프로젝트 초대 취소")
+    @DeleteMapping("/projects/{projectId}/invitations/{invitationId}")
+    public ApiResponse<Void> cancel(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId,
+            @PathVariable Long invitationId
+    ) {
+        invitationService.cancel(
+                memberDetails.getMemberId(),
+                projectId,
+                invitationId
+        );
+        return ApiResponse.success("Project invitation canceled.");
     }
 }

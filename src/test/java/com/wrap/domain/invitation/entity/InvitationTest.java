@@ -91,6 +91,46 @@ class InvitationTest {
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
     }
 
+    @Test
+    void 초대를_거절하면_REJECTED_상태가_된다() {
+        Invitation invitation = invitation();
+
+        invitation.reject();
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.REJECTED);
+    }
+
+    @Test
+    void 이미_처리된_초대는_거절할_수_없다() {
+        Invitation invitation = invitation();
+        invitation.accept();
+
+        assertThatThrownBy(invitation::reject)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("대기 중인 초대만 거절할 수 있습니다.");
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+    }
+
+    @Test
+    void 초대를_취소하면_CANCELED_상태가_된다() {
+        Invitation invitation = invitation();
+
+        invitation.cancel();
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.CANCELED);
+    }
+
+    @Test
+    void 이미_처리된_초대는_취소할_수_없다() {
+        Invitation invitation = invitation();
+        invitation.reject();
+
+        assertThatThrownBy(invitation::cancel)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("대기 중인 초대만 취소할 수 있습니다.");
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.REJECTED);
+    }
+
     private Invitation invitation() {
         return Invitation.create(
                 project(),
