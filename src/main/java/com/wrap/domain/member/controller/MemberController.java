@@ -1,6 +1,7 @@
 package com.wrap.domain.member.controller;
 
 import com.wrap.domain.member.dto.request.LoginRequest;
+import com.wrap.domain.member.dto.request.MemberUpdateRequest;
 import com.wrap.domain.member.dto.request.SignupRequest;
 import com.wrap.domain.member.dto.response.MemberResponse;
 import com.wrap.domain.member.service.MemberService;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -55,6 +57,16 @@ public class MemberController {
     ) {
         MemberResponse response = memberService.getMe(memberDetails.getMemberId());
         return ResponseEntity.ok(ApiResponse.success(response, "조회에 성공했습니다."));
+    }
+
+    @Operation(summary = "내 정보 수정")
+    @PatchMapping("/me")
+    public ResponseEntity<ApiResponse<MemberResponse>> updateMe(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @RequestBody @Valid MemberUpdateRequest request
+    ) {
+        MemberResponse response = memberService.updateMe(memberDetails.getMemberId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "수정에 성공했습니다."));
     }
 
     @Operation(summary = "로그아웃")
