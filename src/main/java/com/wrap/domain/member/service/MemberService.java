@@ -69,6 +69,14 @@ public class MemberService {
         return MemberResponse.from(memberDetails.getMember());
     }
 
+    @Transactional(readOnly = true)
+    public MemberResponse getMe(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new CustomException(ErrorCode.UNAUTHORIZED));
+
+        return MemberResponse.from(member);
+    }
+
     public void logout(HttpServletRequest httpRequest) {
         SecurityContextHolder.clearContext();
         HttpSession session = httpRequest.getSession(false);
