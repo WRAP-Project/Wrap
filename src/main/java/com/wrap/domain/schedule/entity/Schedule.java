@@ -2,8 +2,11 @@ package com.wrap.domain.schedule.entity;
 
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.entity.Project;
+import com.wrap.domain.schedule.enums.ScheduleType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -51,6 +54,13 @@ public class Schedule {
     @Column(name = "is_shared", nullable = false)
     private boolean shared = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "schedule_type", nullable = false, length = 20, columnDefinition = "varchar(20) default 'MEETING'")
+    private ScheduleType type = ScheduleType.MEETING;
+
+    @Column(name = "reminder_enabled", nullable = false, columnDefinition = "boolean default false")
+    private boolean reminder = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -61,6 +71,12 @@ public class Schedule {
 
     public Schedule(Project project, Member creator, String title, String description,
                     LocalDateTime startAt, LocalDateTime endAt, boolean shared) {
+        this(project, creator, title, description, startAt, endAt, shared, ScheduleType.MEETING, false);
+    }
+
+    public Schedule(Project project, Member creator, String title, String description,
+                    LocalDateTime startAt, LocalDateTime endAt, boolean shared,
+                    ScheduleType type, boolean reminder) {
         this.project = project;
         this.creator = creator;
         this.title = title;
@@ -68,15 +84,25 @@ public class Schedule {
         this.startAt = startAt;
         this.endAt = endAt;
         this.shared = shared;
+        this.type = type == null ? ScheduleType.MEETING : type;
+        this.reminder = reminder;
     }
 
     public void update(Project project, String title, String description,
                        LocalDateTime startAt, LocalDateTime endAt, boolean shared) {
+        update(project, title, description, startAt, endAt, shared, type, reminder);
+    }
+
+    public void update(Project project, String title, String description,
+                       LocalDateTime startAt, LocalDateTime endAt, boolean shared,
+                       ScheduleType type, boolean reminder) {
         this.project = project;
         this.title = title;
         this.description = description;
         this.startAt = startAt;
         this.endAt = endAt;
         this.shared = shared;
+        this.type = type == null ? ScheduleType.MEETING : type;
+        this.reminder = reminder;
     }
 }

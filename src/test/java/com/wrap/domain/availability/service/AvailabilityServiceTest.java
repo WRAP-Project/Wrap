@@ -24,6 +24,7 @@ import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +84,36 @@ class AvailabilityServiceTest {
     }
 
     @Test
+    void createStoresAvailabilityTimeRange() {
+        Project project = project(10L);
+        ProjectMember creator = projectMember(1L, 1L, project, ProjectMemberRole.MEMBER);
+        when(projectMemberValidator.findActiveProject(10L)).thenReturn(project);
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(creator);
+        when(availabilityRequestRepository.save(any(AvailabilityRequest.class))).thenAnswer(invocation -> {
+            AvailabilityRequest availabilityRequest = invocation.getArgument(0);
+            ReflectionTestUtils.setField(availabilityRequest, "id", 100L);
+            return availabilityRequest;
+        });
+
+        var response = availabilityService.create(
+                1L,
+                10L,
+                new AvailabilityRequestCreateRequest(
+                        "Meeting",
+                        null,
+                        LocalDate.of(2026, 7, 15),
+                        LocalDate.of(2026, 7, 22),
+                        LocalTime.of(9, 0),
+                        LocalTime.of(20, 0),
+                        60
+                )
+        );
+
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(20, 0));
+    }
+
+    @Test
     void upsertMyResponseRejectsSlotOutsideRequestRange() {
         Project project = project(10L);
         ProjectMember member = projectMember(1L, 1L, project, ProjectMemberRole.MEMBER);
@@ -95,6 +126,39 @@ class AvailabilityServiceTest {
                 new AvailabilitySlotRequest(
                         LocalDateTime.of(2026, 7, 23, 10, 0),
                         LocalDateTime.of(2026, 7, 23, 11, 0)
+                )
+        ));
+
+        assertThatThrownBy(() -> availabilityService.upsertMyResponse(1L, 10L, 100L, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_SLOT_RANGE));
+    }
+
+    @Test
+    void upsertMyResponseRejectsSlotOutsideRequestTimeRange() {
+        Project project = project(10L);
+        ProjectMember member = projectMember(1L, 1L, project, ProjectMemberRole.MEMBER);
+        AvailabilityRequest availabilityRequest = AvailabilityRequest.create(
+                project,
+                member,
+                "Meeting",
+                null,
+                LocalDate.of(2026, 7, 15),
+                LocalDate.of(2026, 7, 22),
+                LocalTime.of(9, 0),
+                LocalTime.of(17, 0),
+                60
+        );
+        ReflectionTestUtils.setField(availabilityRequest, "id", 100L);
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(member);
+        when(availabilityRequestRepository.findByIdAndProject_Id(100L, 10L))
+                .thenReturn(Optional.of(availabilityRequest));
+
+        AvailabilityResponseUpsertRequest request = new AvailabilityResponseUpsertRequest(List.of(
+                new AvailabilitySlotRequest(
+                        LocalDateTime.of(2026, 7, 15, 18, 0),
+                        LocalDateTime.of(2026, 7, 15, 19, 0)
                 )
         ));
 

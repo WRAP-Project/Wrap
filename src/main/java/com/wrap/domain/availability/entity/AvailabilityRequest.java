@@ -20,6 +20,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,6 +32,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Table(name = "availability_request")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AvailabilityRequest {
+
+    private static final LocalTime DEFAULT_START_TIME = LocalTime.MIN;
+    private static final LocalTime DEFAULT_END_TIME = LocalTime.of(23, 59, 59);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -55,6 +59,12 @@ public class AvailabilityRequest {
 
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
+
+    @Column(name = "start_time", nullable = false, columnDefinition = "time default '00:00:00'")
+    private LocalTime startTime = DEFAULT_START_TIME;
+
+    @Column(name = "end_time", nullable = false, columnDefinition = "time default '23:59:59'")
+    private LocalTime endTime = DEFAULT_END_TIME;
 
     @Column(name = "slot_unit_minutes", nullable = false)
     private int slotUnitMinutes;
@@ -84,6 +94,21 @@ public class AvailabilityRequest {
             LocalDate endDate,
             int slotUnitMinutes
     ) {
+        return create(project, creator, title, description, startDate, endDate, DEFAULT_START_TIME, DEFAULT_END_TIME,
+                slotUnitMinutes);
+    }
+
+    public static AvailabilityRequest create(
+            Project project,
+            ProjectMember creator,
+            String title,
+            String description,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            int slotUnitMinutes
+    ) {
         AvailabilityRequest request = new AvailabilityRequest();
         request.project = project;
         request.creator = creator;
@@ -91,6 +116,8 @@ public class AvailabilityRequest {
         request.description = description;
         request.startDate = startDate;
         request.endDate = endDate;
+        request.startTime = startTime == null ? DEFAULT_START_TIME : startTime;
+        request.endTime = endTime == null ? DEFAULT_END_TIME : endTime;
         request.slotUnitMinutes = slotUnitMinutes;
         request.status = AvailabilityRequestStatus.OPEN;
         return request;

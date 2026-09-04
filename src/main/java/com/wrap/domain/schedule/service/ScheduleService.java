@@ -14,6 +14,7 @@ import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
 import com.wrap.domain.schedule.entity.Schedule;
 import com.wrap.domain.schedule.entity.ScheduleCheck;
+import com.wrap.domain.schedule.enums.ScheduleType;
 import com.wrap.domain.schedule.repository.ScheduleCheckRepository;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
 import com.wrap.global.exception.CustomException;
@@ -52,7 +53,9 @@ public class ScheduleService {
                 request.description(),
                 request.startAt(),
                 request.endAt(),
-                request.shared()
+                request.shared(),
+                resolveType(request.type()),
+                Boolean.TRUE.equals(request.reminder())
         );
 
         return ScheduleResponse.from(scheduleRepository.save(schedule));
@@ -107,6 +110,10 @@ public class ScheduleService {
         LocalDateTime startAt = request.startAt() == null ? schedule.getStartAt() : request.startAt();
         LocalDateTime endAt = request.endAt() == null ? schedule.getEndAt() : request.endAt();
         boolean shared = request.shared() == null ? schedule.isShared() : request.shared();
+        ScheduleType type = request.type() == null ? schedule.getType() : request.type();
+        boolean reminder = request.reminder() == null
+                ? schedule.isReminder()
+                : request.reminder();
 
         validateDateRange(startAt, endAt);
         schedule.update(
@@ -115,7 +122,9 @@ public class ScheduleService {
                 description,
                 startAt,
                 endAt,
-                shared
+                shared,
+                type,
+                reminder
         );
 
         return ScheduleResponse.from(schedule);
@@ -283,6 +292,10 @@ public class ScheduleService {
         if (!endAt.isAfter(startAt)) {
             throw new CustomException(ErrorCode.INVALID_DATE_RANGE);
         }
+    }
+
+    private ScheduleType resolveType(ScheduleType type) {
+        return type == null ? ScheduleType.MEETING : type;
     }
 
     private LocalDateTime toStartOfDay(LocalDate date) {

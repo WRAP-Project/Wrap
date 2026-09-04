@@ -48,6 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class AvailabilityService {
 
     private static final int SUPPORTED_SLOT_UNIT_MINUTES = 60;
+    private static final LocalTime DEFAULT_START_TIME = LocalTime.MIN;
+    private static final LocalTime DEFAULT_END_TIME = LocalTime.of(23, 59, 59);
 
     private final AvailabilityRequestRepository availabilityRequestRepository;
     private final AvailabilityResponseRepository availabilityResponseRepository;
@@ -64,11 +66,16 @@ public class AvailabilityService {
         Project project = projectMemberValidator.findActiveProject(projectId);
         ProjectMember creator = projectMemberValidator.findJoinedMember(memberId, projectId);
         validateRequestRange(request.startDate(), request.endDate());
+        LocalTime startTime = resolveStartTime(request.startTime());
+        LocalTime endTime = resolveEndTime(request.endTime());
+        validateTimeRange(startTime, endTime);
         validateSlotUnit(request.slotUnitMinutes());
-        if (availabilityRequestRepository.existsByProject_IdAndStartDateAndEndDate(
+        if (availabilityRequestRepository.existsByProject_IdAndStartDateAndEndDateAndStartTimeAndEndTime(
                 projectId,
                 request.startDate(),
-                request.endDate()
+                request.endDate(),
+                startTime,
+                endTime
         )) {
             throw new CustomException(ErrorCode.AVAILABILITY_REQUEST_DUPLICATED);
         }
@@ -80,6 +87,8 @@ public class AvailabilityService {
                 request.description(),
                 request.startDate(),
                 request.endDate(),
+                startTime,
+                endTime,
                 request.slotUnitMinutes()
         );
         AvailabilityRequest savedRequest = availabilityRequestRepository.save(availabilityRequest);
@@ -307,6 +316,12 @@ public class AvailabilityService {
         }
     }
 
+    private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
+        if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
+            throw new CustomException(ErrorCode.INVALID_AVAILABILITY_RANGE);
+        }
+    }
+
     private void validateDateRange(LocalDate from, LocalDate to) {
         if (from != null && to != null && from.isAfter(to)) {
             throw new CustomException(ErrorCode.INVALID_DATE_RANGE);
@@ -343,6 +358,20 @@ public class AvailabilityService {
         if (startAt.isBefore(rangeStart) || endAt.isAfter(rangeEndExclusive)) {
             throw new CustomException(ErrorCode.INVALID_SLOT_RANGE);
         }
+
+        if (!startAt.toLocalDate().equals(endAt.toLocalDate())
+                || startAt.toLocalTime().isBefore(availabilityRequest.getStartTime())
+                || endAt.toLocalTime().isAfter(availabilityRequest.getEndTime())) {
+            throw new CustomException(ErrorCode.INVALID_SLOT_RANGE);
+        }
+    }
+
+    private LocalTime resolveStartTime(LocalTime startTime) {
+        return startTime == null ? DEFAULT_START_TIME : startTime;
+    }
+
+    private LocalTime resolveEndTime(LocalTime endTime) {
+        return endTime == null ? DEFAULT_END_TIME : endTime;
     }
 
     private int countJoinedMembers(Long projectId) {
