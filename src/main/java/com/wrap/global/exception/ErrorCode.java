@@ -70,6 +70,26 @@ public enum ErrorCode {
             "INVITATION_ALREADY_PROCESSED",
             "Invitation has already been processed."
     ),
+    INVITE_LINK_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "INVITE_LINK_ALREADY_EXISTS",
+            "An active project invite link already exists."
+    ),
+    INVITE_LINK_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "INVITE_LINK_NOT_FOUND",
+            "Project invite link not found."
+    ),
+    INVITE_LINK_ALREADY_REVOKED(
+            HttpStatus.CONFLICT,
+            "INVITE_LINK_ALREADY_REVOKED",
+            "Project invite link has already been revoked."
+    ),
+    INVITE_LINK_TOKEN_GENERATION_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "INVITE_LINK_TOKEN_GENERATION_FAILED",
+            "Failed to generate a unique project invite link token."
+    ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
     AVAILABILITY_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,

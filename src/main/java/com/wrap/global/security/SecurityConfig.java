@@ -67,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST, "/members/signup", "/members/login"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/invite-links/**").permitAll()
                         .requestMatchers(
                                 "/h2-console/**", "/swagger-ui/**",
                                 "/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**",
