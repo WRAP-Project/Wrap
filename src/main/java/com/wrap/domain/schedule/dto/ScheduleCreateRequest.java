@@ -1,5 +1,6 @@
 package com.wrap.domain.schedule.dto;
 
+import com.wrap.domain.schedule.enums.ScheduleType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,8 +22,23 @@ public record ScheduleCreateRequest(
         @NotNull(message = "종료 일시는 필수입니다.")
         LocalDateTime endAt,
 
-        boolean shared
+        boolean shared,
+
+        ScheduleType type,
+
+        Boolean reminder
 ) {
+
+    public ScheduleCreateRequest(
+            Long projectId,
+            String title,
+            String description,
+            LocalDateTime startAt,
+            LocalDateTime endAt,
+            boolean shared
+    ) {
+        this(projectId, title, description, startAt, endAt, shared, null, null);
+    }
 
     @AssertTrue(message = "종료 시간은 시작 시간보다 이후여야 합니다.")
     public boolean isValidDateRange() {

@@ -38,6 +38,7 @@ class TestApiSwaggerTest {
                 .andExpect(jsonPath("$.paths['/schedules/{scheduleId}/check']").exists())
                 .andExpect(jsonPath("$.paths['/schedules/{scheduleId}/uncheck']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/calendar/risk-checks']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}']").exists())
                 .andExpect(jsonPath(

@@ -14,6 +14,7 @@ import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
 import com.wrap.domain.schedule.entity.Schedule;
 import com.wrap.domain.schedule.entity.ScheduleCheck;
+import com.wrap.domain.schedule.enums.ScheduleType;
 import com.wrap.domain.schedule.repository.ScheduleCheckRepository;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
 import com.wrap.global.exception.CustomException;
@@ -82,6 +83,39 @@ class ScheduleServiceTest {
 
         assertThat(response.projectId()).isNull();
         assertThat(response.shared()).isFalse();
+    }
+
+    @Test
+    void createScheduleIncludesTypeAndReminderFlag() {
+        Member creator = member(1L);
+        Project project = project(10L);
+        ScheduleCreateRequest request = new ScheduleCreateRequest(
+                10L,
+                "Deadline schedule",
+                "Use front calendar fields.",
+                LocalDateTime.of(2026, 7, 23, 14, 0),
+                LocalDateTime.of(2026, 7, 23, 15, 0),
+                true,
+                ScheduleType.DEADLINE,
+                true
+        );
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(creator));
+        when(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).thenReturn(true);
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
+        when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> {
+            Schedule schedule = invocation.getArgument(0);
+            ReflectionTestUtils.setField(schedule, "id", 1L);
+            return schedule;
+        });
+
+        ScheduleResponse response = scheduleService.create(1L, request);
+
+        assertThat(response.type()).isEqualTo(ScheduleType.DEADLINE);
+        assertThat(response.reminder()).isTrue();
     }
 
     @Test

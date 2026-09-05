@@ -1,6 +1,7 @@
 package com.wrap.domain.schedule.dto;
 
 import com.wrap.domain.schedule.entity.Schedule;
+import com.wrap.domain.schedule.enums.ScheduleType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -13,6 +14,8 @@ public record ScheduleReminderResponse(
         LocalDateTime startAt,
         LocalDateTime endAt,
         boolean shared,
+        ScheduleType type,
+        boolean reminder,
         long daysLeft
 ) {
 
@@ -25,6 +28,8 @@ public record ScheduleReminderResponse(
                 schedule.getStartAt(),
                 schedule.getEndAt(),
                 schedule.isShared(),
+                schedule.getType(),
+                schedule.isReminder(),
                 ChronoUnit.DAYS.between(today, schedule.getEndAt().toLocalDate())
         );
     }

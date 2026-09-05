@@ -3,6 +3,7 @@ package com.wrap.domain.availability.repository;
 import com.wrap.domain.availability.entity.AvailabilityRequest;
 import com.wrap.domain.availability.enums.AvailabilityRequestStatus;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,7 +14,13 @@ public interface AvailabilityRequestRepository extends JpaRepository<Availabilit
 
     Optional<AvailabilityRequest> findByIdAndProject_Id(Long availabilityRequestId, Long projectId);
 
-    boolean existsByProject_IdAndStartDateAndEndDate(Long projectId, LocalDate startDate, LocalDate endDate);
+    boolean existsByProject_IdAndStartDateAndEndDateAndStartTimeAndEndTime(
+            Long projectId,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalTime startTime,
+            LocalTime endTime
+    );
 
     @Query("""
             select ar from AvailabilityRequest ar

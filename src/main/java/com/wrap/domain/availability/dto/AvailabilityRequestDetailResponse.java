@@ -3,6 +3,7 @@ package com.wrap.domain.availability.dto;
 import com.wrap.domain.availability.entity.AvailabilityRequest;
 import com.wrap.domain.availability.enums.AvailabilityRequestStatus;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 public record AvailabilityRequestDetailResponse(
         Long availabilityRequestId,
@@ -11,6 +12,8 @@ public record AvailabilityRequestDetailResponse(
         String description,
         LocalDate startDate,
         LocalDate endDate,
+        LocalTime startTime,
+        LocalTime endTime,
         int slotUnitMinutes,
         AvailabilityRequestStatus status,
         int totalMemberCount,
@@ -30,6 +33,8 @@ public record AvailabilityRequestDetailResponse(
                 request.getDescription(),
                 request.getStartDate(),
                 request.getEndDate(),
+                request.getStartTime(),
+                request.getEndTime(),
                 request.getSlotUnitMinutes(),
                 request.getStatus(),
                 totalMemberCount,
