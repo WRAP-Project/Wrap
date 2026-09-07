@@ -1,6 +1,7 @@
 package com.wrap.domain.member.service;
 
 import com.wrap.domain.member.dto.request.LoginRequest;
+import com.wrap.domain.member.dto.request.MemberUpdateRequest;
 import com.wrap.domain.member.dto.request.SignupRequest;
 import com.wrap.domain.member.dto.response.MemberResponse;
 import com.wrap.domain.member.entity.Member;
@@ -67,6 +68,30 @@ public class MemberService {
         );
 
         return MemberResponse.from(memberDetails.getMember());
+    }
+
+    @Transactional(readOnly = true)
+    public MemberResponse getMe(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new CustomException(ErrorCode.UNAUTHORIZED));
+
+        return MemberResponse.from(member);
+    }
+
+    @Transactional
+    public MemberResponse updateMe(Long memberId, MemberUpdateRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new CustomException(ErrorCode.UNAUTHORIZED));
+
+        member.updateProfile(
+                request.getNickname(),
+                request.getTeam(),
+                request.getRole(),
+                request.getBio(),
+                request.getAccentColor()
+        );
+
+        return MemberResponse.from(member);
     }
 
     public void logout(HttpServletRequest httpRequest) {

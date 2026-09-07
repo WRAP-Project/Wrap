@@ -36,6 +36,15 @@ public class Member {
     @Column(name = "profile_image", length = 500)
     private String profileImage;
 
+    @Column(length = 50)
+    private String team;
+
+    @Column(name = "role", length = 50)
+    private String role;
+
+    @Column(name = "accent_color", length = 7)
+    private String accentColor;
+
     @Column(columnDefinition = "TEXT")
     private String bio;
 
@@ -55,5 +64,29 @@ public class Member {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
+    }
+
+    public void updateProfile(
+            String nickname,
+            String team,
+            String role,
+            String bio,
+            String accentColor
+    ) {
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+        if (team != null) {
+            this.team = team;
+        }
+        if (role != null) {
+            this.role = role;
+        }
+        if (bio != null) {
+            this.bio = bio;
+        }
+        if (accentColor != null) {
+            this.accentColor = accentColor;
+        }
     }
 }
