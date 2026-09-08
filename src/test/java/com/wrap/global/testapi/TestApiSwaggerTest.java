@@ -57,6 +57,43 @@ class TestApiSwaggerTest {
                 .andExpect(jsonPath("$.paths['/invitations'].get").exists())
                 .andExpect(jsonPath("$.components.schemas.InvitationCreateRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.InvitationResponse").exists())
-                .andExpect(jsonPath("$.components.schemas.ReceivedInvitationResponse").exists());
+                .andExpect(jsonPath("$.components.schemas.ReceivedInvitationResponse").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.sessionAuth.in")
+                        .value("cookie"))
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links'].post.summary"
+                ).value("프로젝트 초대 링크 생성"))
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links'].post.responses['201']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links'].post.responses['409']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links'].post.responses['500']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links'].get.summary"
+                ).value("프로젝트 초대 링크 목록 조회"))
+                .andExpect(jsonPath(
+                        "$.paths['/projects/{projectId}/invite-links/{inviteLinkId}'].delete"
+                ).exists())
+                .andExpect(jsonPath("$.paths['/invite-links/{token}'].get.summary")
+                        .value("초대 링크 프로젝트 정보 조회"))
+                .andExpect(jsonPath("$.paths['/invite-links/{token}'].get.security")
+                        .doesNotExist())
+                .andExpect(jsonPath("$.paths['/invite-links/{token}/join'].post.summary")
+                        .value("초대 링크를 통한 프로젝트 참여"))
+                .andExpect(jsonPath(
+                        "$.paths['/invite-links/{token}/join'].post.security[0].sessionAuth"
+                ).exists())
+                .andExpect(jsonPath("$.components.schemas.ProjectInviteLinkResponse")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ProjectInviteLinkSummaryResponse")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ProjectInviteLinkInfoResponse")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ProjectInviteJoinResponse")
+                        .exists());
     }
 }
