@@ -2,6 +2,7 @@ package com.wrap.domain.schedule.service;
 
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
+import com.wrap.domain.milestone.repository.MilestoneRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
@@ -9,6 +10,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.schedule.dto.ScheduleCreateRequest;
 import com.wrap.domain.schedule.dto.ScheduleDetailResponse;
+import com.wrap.domain.schedule.dto.ScheduleReminderChecklistItemResponse;
 import com.wrap.domain.schedule.dto.ScheduleReminderResponse;
 import com.wrap.domain.schedule.dto.ScheduleResponse;
 import com.wrap.domain.schedule.dto.ScheduleUpdateRequest;
@@ -17,10 +19,12 @@ import com.wrap.domain.schedule.entity.ScheduleCheck;
 import com.wrap.domain.schedule.enums.ScheduleType;
 import com.wrap.domain.schedule.repository.ScheduleCheckRepository;
 import com.wrap.domain.schedule.repository.ScheduleRepository;
+import com.wrap.domain.task.repository.TaskRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +44,8 @@ public class ScheduleService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ScheduleCheckRepository scheduleCheckRepository;
+    private final MilestoneRepository milestoneRepository;
+    private final TaskRepository taskRepository;
 
     @Transactional
     public ScheduleResponse create(Long memberId, ScheduleCreateRequest request) {
@@ -181,8 +187,39 @@ public class ScheduleService {
                         PageRequest.of(0, reminderLimit)
                 )
                 .stream()
-                .map(schedule -> ScheduleReminderResponse.from(schedule, today))
+                .map(schedule -> ScheduleReminderResponse.from(
+                        schedule,
+                        today,
+                        findReminderChecklist(memberId, schedule)
+                ))
                 .toList();
+    }
+
+    private List<ScheduleReminderChecklistItemResponse> findReminderChecklist(Long memberId, Schedule schedule) {
+        Long projectId = schedule.getProject().getId();
+        LocalDate deadlineDate = schedule.getEndAt().toLocalDate();
+        LocalDateTime dayStart = deadlineDate.atStartOfDay();
+        LocalDateTime dayEnd = deadlineDate.plusDays(1).atStartOfDay();
+
+        List<ScheduleReminderChecklistItemResponse> checklist = new ArrayList<>();
+
+        milestoneRepository.findByProjectIdAndDueDate(projectId, deadlineDate)
+                .stream()
+                .map(ScheduleReminderChecklistItemResponse::from)
+                .forEach(checklist::add);
+
+        taskRepository.findReminderChecklistTasks(projectId, deadlineDate)
+                .stream()
+                .map(ScheduleReminderChecklistItemResponse::from)
+                .forEach(checklist::add);
+
+        scheduleRepository.findSharedProjectSchedules(projectId, dayStart, dayEnd)
+                .stream()
+                .filter(related -> !related.getId().equals(schedule.getId()))
+                .map(related -> ScheduleReminderChecklistItemResponse.from(related, isChecked(related.getId(), memberId)))
+                .forEach(checklist::add);
+
+        return checklist;
     }
 
     private Member findMember(Long memberId) {

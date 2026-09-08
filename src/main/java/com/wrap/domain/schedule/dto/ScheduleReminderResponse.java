@@ -5,6 +5,7 @@ import com.wrap.domain.schedule.enums.ScheduleType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 public record ScheduleReminderResponse(
         Long id,
@@ -16,10 +17,15 @@ public record ScheduleReminderResponse(
         boolean shared,
         ScheduleType type,
         boolean reminder,
-        long daysLeft
+        long daysLeft,
+        List<ScheduleReminderChecklistItemResponse> checklist
 ) {
 
-    public static ScheduleReminderResponse from(Schedule schedule, LocalDate today) {
+    public static ScheduleReminderResponse from(
+            Schedule schedule,
+            LocalDate today,
+            List<ScheduleReminderChecklistItemResponse> checklist
+    ) {
         return new ScheduleReminderResponse(
                 schedule.getId(),
                 schedule.getProject().getId(),
@@ -30,7 +36,8 @@ public record ScheduleReminderResponse(
                 schedule.isShared(),
                 schedule.getType(),
                 schedule.isReminder(),
-                ChronoUnit.DAYS.between(today, schedule.getEndAt().toLocalDate())
+                ChronoUnit.DAYS.between(today, schedule.getEndAt().toLocalDate()),
+                checklist
         );
     }
 }
