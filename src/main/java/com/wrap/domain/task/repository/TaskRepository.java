@@ -20,6 +20,19 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("""
             select t from Task t
+            left join fetch t.assignee assignee
+            left join fetch assignee.member
+            where t.project.id = :projectId
+              and t.dueDate = :dueDate
+            order by t.id asc
+            """)
+    List<Task> findReminderChecklistTasks(
+            @Param("projectId") Long projectId,
+            @Param("dueDate") LocalDate dueDate
+    );
+
+    @Query("""
+            select t from Task t
             join fetch t.project
             left join fetch t.assignee assignee
             left join fetch assignee.member
