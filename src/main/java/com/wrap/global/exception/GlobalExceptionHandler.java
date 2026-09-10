@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
         ErrorBody errorBody = new ErrorBody(
                 ErrorCode.INVALID_REQUEST.getCode(),
                 ErrorCode.INVALID_REQUEST.getMessage(),
-                List.of(new FieldError(e.getName(), "Request parameter type is invalid."))
+                List.of(new FieldError(e.getName(), "요청 파라미터 형식이 올바르지 않습니다."))
         );
         return ResponseEntity.badRequest().body(ApiResponse.fail(errorBody));
     }
