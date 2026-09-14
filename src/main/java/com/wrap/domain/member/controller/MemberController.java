@@ -33,9 +33,10 @@ public class MemberController {
     @Operation(summary = "회원가입")
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<MemberResponse>> signup(
-            @RequestBody @Valid SignupRequest request
+            @RequestBody @Valid SignupRequest request,
+            HttpServletRequest httpRequest
     ) {
-        MemberResponse response = memberService.signup(request);
+        MemberResponse response = memberService.signup(request, httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "회원가입이 완료되었습니다."));
     }

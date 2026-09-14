@@ -32,7 +32,7 @@ public class MemberService {
     private final UserDetailsService userDetailsService;
 
     @Transactional
-    public MemberResponse signup(SignupRequest request) {
+    public MemberResponse signup(SignupRequest request, HttpServletRequest httpRequest) {
         if (memberRepository.existsByEmail(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -43,7 +43,14 @@ public class MemberService {
                 .nickname(request.getNickname())
                 .build();
 
-        return MemberResponse.from(memberRepository.save(member));
+        MemberResponse response = MemberResponse.from(memberRepository.save(member));
+
+        // 회원가입은 인증을 부여하지 않는다.
+        // 이전 사용자의 세션이 남아 있으면 새 회원이 그 사용자로 인식되므로 반드시 폐기한다.
+        SecurityContextHolder.clearContext();
+        invalidateCurrentSession(httpRequest);
+
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -61,6 +68,11 @@ public class MemberService {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
+
+        // 세션 고정(Session Fixation) 방지.
+        // formLogin을 끈 수동 로그인이라 Spring Security의 기본 세션 ID 재발급이 동작하지 않는다.
+        // 기존 세션을 직접 폐기해야 이전 사용자의 세션이 재사용되지 않는다.
+        invalidateCurrentSession(httpRequest);
 
         HttpSession session = httpRequest.getSession(true);
         session.setAttribute(
@@ -96,6 +108,14 @@ public class MemberService {
 
     public void logout(HttpServletRequest httpRequest) {
         SecurityContextHolder.clearContext();
+        invalidateCurrentSession(httpRequest);
+    }
+
+    private void invalidateCurrentSession(HttpServletRequest httpRequest) {
+        if (httpRequest == null) {
+            return;
+        }
+
         HttpSession session = httpRequest.getSession(false);
         if (session != null) {
             session.invalidate();
