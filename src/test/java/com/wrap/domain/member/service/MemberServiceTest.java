@@ -10,20 +10,26 @@ import com.wrap.global.exception.ErrorCode;
 import com.wrap.global.security.MemberDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +46,12 @@ class MemberServiceTest {
 
     @InjectMocks
     private MemberService memberService;
+
+    @AfterEach
+    void clearSecurityContext() {
+        // SecurityContextHolder는 ThreadLocal이라 정리하지 않으면 다른 테스트로 인증 상태가 샌다.
+        SecurityContextHolder.clearContext();
+    }
 
     private SignupRequest signupRequest(String email, String password, String nickname) {
         SignupRequest request = new SignupRequest();
@@ -76,7 +88,7 @@ class MemberServiceTest {
         given(passwordEncoder.encode("password123")).willReturn("encoded");
         given(memberRepository.save(any(Member.class))).willReturn(saved);
 
-        MemberResponse response = memberService.signup(request);
+        MemberResponse response = memberService.signup(request, new MockHttpServletRequest());
 
         assertThat(response.getEmail()).isEqualTo("test@test.com");
         assertThat(response.getNickname()).isEqualTo("테스터");
@@ -88,7 +100,7 @@ class MemberServiceTest {
         SignupRequest request = signupRequest("test@test.com", "password123", "테스터");
         given(memberRepository.existsByEmail("test@test.com")).willReturn(true);
 
-        assertThatThrownBy(() -> memberService.signup(request))
+        assertThatThrownBy(() -> memberService.signup(request, new MockHttpServletRequest()))
                 .isInstanceOf(CustomException.class)
                 .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
                         .isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS));
@@ -104,6 +116,7 @@ class MemberServiceTest {
 
         given(userDetailsService.loadUserByUsername("test@test.com")).willReturn(memberDetails);
         given(passwordEncoder.matches("password123", "encoded")).willReturn(true);
+        given(httpRequest.getSession(false)).willReturn(null);
         given(httpRequest.getSession(true)).willReturn(session);
 
         MemberResponse response = memberService.login(request, httpRequest);
@@ -146,5 +159,60 @@ class MemberServiceTest {
         given(httpRequest.getSession(false)).willReturn(null);
 
         assertThatNoException().isThrownBy(() -> memberService.logout(httpRequest));
+    }
+
+    @Test
+    @DisplayName("로그인 - 기존 세션을 폐기하고 새 세션을 발급한다")
+    void login_invalidatesPreviousSession() {
+        LoginRequest request = loginRequest("b@test.com", "password123");
+        MemberDetails memberDetails = new MemberDetails(member(2L, "b@test.com", "encoded", "b"));
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpSession previousSession = mock(HttpSession.class);
+        HttpSession newSession = mock(HttpSession.class);
+
+        given(userDetailsService.loadUserByUsername("b@test.com")).willReturn(memberDetails);
+        given(passwordEncoder.matches("password123", "encoded")).willReturn(true);
+        given(httpRequest.getSession(false)).willReturn(previousSession);
+        given(httpRequest.getSession(true)).willReturn(newSession);
+
+        memberService.login(request, httpRequest);
+
+        verify(previousSession).invalidate();
+        verify(newSession).setAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+                SecurityContextHolder.getContext()
+        );
+    }
+
+    @Test
+    @DisplayName("회원가입 - 이전 사용자의 세션을 폐기한다")
+    void signup_invalidatesPreviousSession() {
+        SignupRequest request = signupRequest("b@test.com", "password123", "b");
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpSession previousSession = mock(HttpSession.class);
+
+        given(memberRepository.existsByEmail("b@test.com")).willReturn(false);
+        given(passwordEncoder.encode("password123")).willReturn("encoded");
+        given(memberRepository.save(any(Member.class)))
+                .willReturn(member(2L, "b@test.com", "encoded", "b"));
+        given(httpRequest.getSession(false)).willReturn(previousSession);
+
+        memberService.signup(request, httpRequest);
+
+        verify(previousSession).invalidate();
+    }
+
+    @Test
+    @DisplayName("회원가입 실패 시 기존 세션을 건드리지 않는다")
+    void signup_duplicateEmail_keepsSession() {
+        SignupRequest request = signupRequest("a@test.com", "password123", "a");
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+
+        given(memberRepository.existsByEmail("a@test.com")).willReturn(true);
+
+        assertThatThrownBy(() -> memberService.signup(request, httpRequest))
+                .isInstanceOf(CustomException.class);
+
+        verify(httpRequest, never()).getSession(anyBoolean());
     }
 }
