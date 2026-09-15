@@ -76,4 +76,16 @@ public class Task {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public void updateStatus(TaskStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("할 일 상태는 필수입니다.");
+        }
+
+        this.status = status;
+    }
+
+    public boolean isAssignedTo(Long projectMemberId) {
+        return assignee != null && assignee.getId().equals(projectMemberId);
+    }
 }

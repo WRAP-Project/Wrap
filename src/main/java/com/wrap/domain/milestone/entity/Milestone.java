@@ -55,4 +55,12 @@ public class Milestone {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public void updateStatus(MilestoneStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("마일스톤 상태는 필수입니다.");
+        }
+
+        this.status = status;
+    }
 }

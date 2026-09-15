@@ -3,6 +3,7 @@ package com.wrap.domain.schedule.repository;
 import com.wrap.domain.schedule.entity.Schedule;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     List<Schedule> findByProjectId(Long projectId);
 
     List<Schedule> findByCreatorId(Long creatorId);
+
+    Optional<Schedule> findByIdAndProjectId(Long id, Long projectId);
 
     @Query("""
             select s from Schedule s

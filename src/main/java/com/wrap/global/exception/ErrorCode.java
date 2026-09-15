@@ -91,6 +91,8 @@ public enum ErrorCode {
             "프로젝트 초대 링크 토큰을 생성하지 못했습니다."
     ),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "일정을 찾을 수 없습니다."),
+    TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "할 일을 찾을 수 없습니다."),
+    MILESTONE_NOT_FOUND(HttpStatus.NOT_FOUND, "MILESTONE_NOT_FOUND", "마일스톤을 찾을 수 없습니다."),
     AVAILABILITY_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "AVAILABILITY_REQUEST_NOT_FOUND",
