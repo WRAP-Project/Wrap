@@ -6,130 +6,130 @@ import org.springframework.http.HttpStatus;
 @Getter
 public enum ErrorCode {
 
-    VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed."),
-    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Invalid request."),
-    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", "Invalid date range."),
-    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required."),
-    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED", "Email or password is invalid."),
-    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access is denied."),
-    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", "Member not found."),
-    PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "Project not found."),
-    PROJECT_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_MEMBER_NOT_FOUND", "Project member not found."),
+    VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "입력값이 올바르지 않습니다."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "잘못된 요청입니다."),
+    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", "날짜 범위가 올바르지 않습니다."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "로그인이 필요합니다."),
+    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다."),
+    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", "회원을 찾을 수 없습니다."),
+    PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "프로젝트를 찾을 수 없습니다."),
+    PROJECT_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_MEMBER_NOT_FOUND", "프로젝트 멤버를 찾을 수 없습니다."),
     PROJECT_ACCESS_DENIED(
             HttpStatus.FORBIDDEN,
             "PROJECT_ACCESS_DENIED",
-            "Project access is denied."
+            "해당 프로젝트에 접근할 권한이 없습니다."
     ),
     PROJECT_OWNER_REQUIRED(
             HttpStatus.FORBIDDEN,
             "PROJECT_OWNER_REQUIRED",
-            "Project owner permission is required."
+            "프로젝트 관리자 권한이 필요합니다."
     ),
     PROJECT_ALREADY_COMPLETED(
             HttpStatus.CONFLICT,
             "PROJECT_ALREADY_COMPLETED",
-            "Project is already completed."
+            "이미 완료된 프로젝트입니다."
     ),
     PROJECT_NOT_COMPLETED(
             HttpStatus.CONFLICT,
             "PROJECT_NOT_COMPLETED",
-            "Only completed projects can be reopened."
+            "완료된 프로젝트만 다시 진행할 수 있습니다."
     ),
     LAST_PROJECT_OWNER(
             HttpStatus.CONFLICT,
             "LAST_PROJECT_OWNER",
-            "The project must have at least one owner."
+            "프로젝트에는 최소 한 명의 관리자가 필요합니다."
     ),
     PROJECT_OWNER_CANNOT_BE_REMOVED(
             HttpStatus.CONFLICT,
             "PROJECT_OWNER_CANNOT_BE_REMOVED",
-            "A project owner cannot be removed."
+            "프로젝트 관리자는 내보낼 수 없습니다."
     ),
     PROJECT_MEMBER_ALREADY_EXISTS(
             HttpStatus.CONFLICT,
             "PROJECT_MEMBER_ALREADY_EXISTS",
-            "The member is already participating in the project."
+            "이미 프로젝트에 참여 중인 회원입니다."
     ),
     INVITATION_ALREADY_EXISTS(
             HttpStatus.CONFLICT,
             "INVITATION_ALREADY_EXISTS",
-            "An active invitation already exists."
+            "이미 대기 중인 초대가 있습니다."
     ),
     INVITATION_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "INVITATION_NOT_FOUND",
-            "Invitation not found."
+            "초대를 찾을 수 없습니다."
     ),
     INVITATION_ACCESS_DENIED(
             HttpStatus.FORBIDDEN,
             "INVITATION_ACCESS_DENIED",
-            "Invitation access is denied."
+            "해당 초대에 접근할 권한이 없습니다."
     ),
     INVITATION_ALREADY_PROCESSED(
             HttpStatus.CONFLICT,
             "INVITATION_ALREADY_PROCESSED",
-            "Invitation has already been processed."
+            "이미 처리된 초대입니다."
     ),
     INVITE_LINK_ALREADY_EXISTS(
             HttpStatus.CONFLICT,
             "INVITE_LINK_ALREADY_EXISTS",
-            "An active project invite link already exists."
+            "이미 활성화된 프로젝트 초대 링크가 있습니다."
     ),
     INVITE_LINK_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "INVITE_LINK_NOT_FOUND",
-            "Project invite link not found."
+            "프로젝트 초대 링크를 찾을 수 없습니다."
     ),
     INVITE_LINK_ALREADY_REVOKED(
             HttpStatus.CONFLICT,
             "INVITE_LINK_ALREADY_REVOKED",
-            "Project invite link has already been revoked."
+            "이미 비활성화된 프로젝트 초대 링크입니다."
     ),
     INVITE_LINK_TOKEN_GENERATION_FAILED(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "INVITE_LINK_TOKEN_GENERATION_FAILED",
-            "Failed to generate a unique project invite link token."
+            "프로젝트 초대 링크 토큰을 생성하지 못했습니다."
     ),
-    SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Schedule not found."),
+    SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "일정을 찾을 수 없습니다."),
     AVAILABILITY_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "AVAILABILITY_REQUEST_NOT_FOUND",
-            "Availability request not found."
+            "일정 조율 요청을 찾을 수 없습니다."
     ),
     AVAILABILITY_RESPONSE_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "AVAILABILITY_RESPONSE_NOT_FOUND",
-            "Availability response not found."
+            "일정 조율 응답을 찾을 수 없습니다."
     ),
     INVALID_AVAILABILITY_RANGE(
             HttpStatus.BAD_REQUEST,
             "INVALID_AVAILABILITY_RANGE",
-            "Invalid availability request range."
+            "일정 조율 요청 기간이 올바르지 않습니다."
     ),
-    INVALID_SLOT_RANGE(HttpStatus.BAD_REQUEST, "INVALID_SLOT_RANGE", "Invalid availability slot range."),
-    INVALID_SLOT_UNIT(HttpStatus.BAD_REQUEST, "INVALID_SLOT_UNIT", "Invalid availability slot unit."),
+    INVALID_SLOT_RANGE(HttpStatus.BAD_REQUEST, "INVALID_SLOT_RANGE", "가능한 시간 범위가 올바르지 않습니다."),
+    INVALID_SLOT_UNIT(HttpStatus.BAD_REQUEST, "INVALID_SLOT_UNIT", "가능한 시간 단위가 올바르지 않습니다."),
     INVALID_RECOMMENDED_SLOT(
             HttpStatus.BAD_REQUEST,
             "INVALID_RECOMMENDED_SLOT",
-            "Selected slot is not available for every project member."
+            "모든 프로젝트 멤버가 가능한 시간이 아닙니다."
     ),
     AVAILABILITY_REQUEST_DUPLICATED(
             HttpStatus.CONFLICT,
             "AVAILABILITY_REQUEST_DUPLICATED",
-            "Availability request already exists for the same range."
+            "동일한 기간의 일정 조율 요청이 이미 존재합니다."
     ),
     AVAILABILITY_REQUEST_ALREADY_CONFIRMED(
             HttpStatus.CONFLICT,
             "AVAILABILITY_REQUEST_ALREADY_CONFIRMED",
-            "Availability request is already confirmed."
+            "이미 확정된 일정 조율 요청입니다."
     ),
     AVAILABILITY_REQUEST_CANCELED(
             HttpStatus.CONFLICT,
             "AVAILABILITY_REQUEST_CANCELED",
-            "Availability request is canceled."
+            "취소된 일정 조율 요청입니다."
     ),
-    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email already exists."),
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Internal server error.");
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "이미 사용 중인 이메일입니다."),
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
