@@ -1,6 +1,7 @@
 package com.wrap.domain.project.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,11 +22,15 @@ import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.service.ProjectService;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -427,6 +432,67 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(projectService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"color\":\"#A78BFA\"}",
+            "{\"name\":null,\"color\":\"#A78BFA\"}"
+    })
+    void updateWithoutNamePassesRequestValidation(String requestBody) throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk());
+
+        verify(projectService).update(eq(1L), eq(10L), argThat(request ->
+                request.getName() == null && "#A78BFA".equals(request.getColor())));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "\\t\\n", "\u2003", "\u3000"})
+    void updateWithEmptyOrWhitespaceNameFailsValidation(String name) throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + name + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void updateWithTooLongNameFailsValidation() throws Exception {
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "a".repeat(101) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("name"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void updateCompletedProjectReturnsConflict() throws Exception {
+        when(projectService.update(eq(1L), eq(10L), any(ProjectUpdateRequest.class)))
+                .thenThrow(new CustomException(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        mockMvc.perform(patch("/projects/10")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"color\":\"#A78BFA\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("PROJECT_ALREADY_COMPLETED"));
     }
 
     private MemberDetails memberDetails(Long memberId) {

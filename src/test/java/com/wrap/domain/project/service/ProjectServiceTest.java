@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -632,6 +634,141 @@ class ProjectServiceTest {
 
         verify(projectRepository).findByIdAndDeletedAtIsNull(10L);
         verifyNoInteractions(memberRepository, projectMemberRepository);
+    }
+
+    @Test
+    void update_colorOnlyPreservesOtherFields() {
+        Project project = project(10L, "Wrap");
+        givenUpdateOwner(project);
+        ProjectUpdateRequest request = new ProjectUpdateRequest();
+        ReflectionTestUtils.setField(request, "color", "#A78BFA");
+
+        ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getColor()).isEqualTo("#A78BFA");
+        assertThat(response.getName()).isEqualTo("Wrap");
+        assertThat(response.getDescription()).isEqualTo("프로젝트 설명");
+        assertThat(response.getGoal()).isEqualTo("프로젝트 목표");
+        assertThat(response.getSuccessCriteria()).isEqualTo("성공 기준");
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(response.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "startDate, 2026-08-31, 2026-08-31, 2026-08-31",
+            "endDate, 2026-07-01, 2026-07-01, 2026-07-01"
+    })
+    void update_singleDateAcceptsValidMergedRange(
+            String field, LocalDate value, LocalDate expectedStart, LocalDate expectedEnd
+    ) {
+        Project project = project(10L, "Wrap");
+        givenUpdateOwner(project);
+        ProjectUpdateRequest request = new ProjectUpdateRequest();
+        ReflectionTestUtils.setField(request, field, value);
+
+        ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getStartDate()).isEqualTo(expectedStart);
+        assertThat(response.getEndDate()).isEqualTo(expectedEnd);
+        assertThat(response.getName()).isEqualTo("Wrap");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"startDate, 2026-09-01", "endDate, 2026-06-30"})
+    void update_singleDateRejectsInvalidMergedRange(String field, LocalDate value) {
+        Project project = project(10L, "Wrap");
+        givenUpdateOwner(project);
+        ProjectUpdateRequest request = new ProjectUpdateRequest();
+        ReflectionTestUtils.setField(request, field, value);
+        ReflectionTestUtils.setField(request, "name", "변경되면 안 되는 이름");
+
+        assertThatThrownBy(() -> projectService.update(1L, 10L, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.INVALID_DATE_RANGE));
+
+        assertThat(project.getName()).isEqualTo("Wrap");
+        assertThat(project.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(project.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+    }
+
+    @Test
+    @DisplayName("완료된 프로젝트는 OWNER도 수정할 수 없고 기존 정보를 유지한다")
+    void update_completedProjectRejected() {
+        Project project = project(10L, "Wrap");
+        LocalDateTime completedAt = LocalDateTime.of(2026, 8, 31, 18, 0);
+        project.complete(completedAt);
+        givenUpdateOwner(project);
+        ProjectUpdateRequest request = updateRequest(
+                "Updated Wrap", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 31));
+
+        assertThatThrownBy(() -> projectService.update(1L, 10L, request))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        assertThat(project.getName()).isEqualTo("Wrap");
+        assertThat(project.getDescription()).isEqualTo("프로젝트 설명");
+        assertThat(project.getGoal()).isEqualTo("프로젝트 목표");
+        assertThat(project.getSuccessCriteria()).isEqualTo("성공 기준");
+        assertThat(project.getColor()).isEqualTo(Project.DEFAULT_COLOR);
+        assertThat(project.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(project.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+        assertThat(project.getStatus()).isEqualTo(ProjectStatus.COMPLETED);
+        assertThat(project.getCompletedAt()).isEqualTo(completedAt);
+    }
+
+    @Test
+    @DisplayName("완료 프로젝트를 재개한 뒤에는 OWNER가 수정할 수 있다")
+    void update_reopenedProjectAllowed() {
+        Project project = project(10L, "Wrap");
+        project.complete(LocalDateTime.of(2026, 8, 31, 18, 0));
+        givenUpdateOwner(project);
+        ProjectUpdateRequest request = new ProjectUpdateRequest();
+        ReflectionTestUtils.setField(request, "name", "Reopened Wrap");
+
+        projectService.reopen(1L, 10L);
+        ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getName()).isEqualTo("Reopened Wrap");
+        assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
+        assertThat(project.getCompletedAt()).isNull();
+        assertThat(project.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(project.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+    }
+
+    @Test
+    @DisplayName("완료 프로젝트도 수정 권한을 먼저 확인한다")
+    void update_completedProjectRequiresOwnerFirst() {
+        Project project = project(10L, "Wrap");
+        project.complete(LocalDateTime.of(2026, 8, 31, 18, 0));
+        ProjectMember joinedMember = ProjectMember.join(
+                mock(Member.class), project, ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 7, 1, 9, 0));
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(joinedMember));
+
+        assertThatThrownBy(() -> projectService.update(1L, 10L, new ProjectUpdateRequest()))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+    }
+
+    private void givenUpdateOwner(Project project) {
+        ProjectMember owner = ProjectMember.createOwner(
+                mock(Member.class), project, LocalDateTime.of(2026, 7, 1, 9, 0));
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
     }
 
     private ProjectCreateRequest createRequest(
