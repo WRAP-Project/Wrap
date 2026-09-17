@@ -4,10 +4,12 @@ import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
+import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.service.ProjectService;
 import com.wrap.global.common.ApiResponse;
 import com.wrap.global.security.MemberDetails;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -46,18 +49,58 @@ public class ProjectController {
         );
     }
 
-    @Operation(summary = "내 프로젝트 목록 조회")
+    @Operation(
+            summary = "내 프로젝트 목록 조회",
+            description = """
+                    로그인한 사용자가 참여 중인(JOINED), 삭제되지 않은 프로젝트만 조회합니다.
+                    status를 생략하면 진행 중·완료 프로젝트를 모두 반환합니다.
+                    IN_PROGRESS는 진행 중, COMPLETED는 완료된 프로젝트만 반환합니다.
+                    상태 값은 대문자로 입력하며 지원하지 않는 값은 400 / INVALID_REQUEST를 반환합니다.
+                    조회 결과가 없으면 빈 목록을 반환합니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200", description = "내 프로젝트 목록 조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400", description = "지원하지 않는 상태 값(INVALID_REQUEST)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401", description = "로그인 필요(UNAUTHORIZED)")
+    })
     @GetMapping
     public ApiResponse<List<ProjectSummaryResponse>> getMyProjects(
-            @AuthenticationPrincipal MemberDetails memberDetails
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @Parameter(
+                    description = "프로젝트 진행 상태. 선택 값이며 생략 시 전체 상태 조회",
+                    example = "IN_PROGRESS"
+            )
+            @RequestParam(required = false) ProjectStatus status
     ) {
         return ApiResponse.success(
-                projectService.getMyProjects(memberDetails.getMemberId()),
+                projectService.getMyProjects(memberDetails.getMemberId(), status),
                 "My projects retrieved."
         );
     }
 
-    @Operation(summary = "프로젝트 상세 조회")
+    @Operation(
+            summary = "프로젝트 상세 조회",
+            description = """
+                    로그인한 사용자가 참여 중인(JOINED), 삭제되지 않은 프로젝트의 상세 정보를 반환합니다.
+                    myRole은 현재 요청자의 프로젝트 관리 권한(OWNER 또는 MEMBER)입니다.
+                    프로젝트 생성자의 권한이나 업무 역할(workRole)을 의미하지 않습니다.
+                    프론트의 버튼 표시 판단에 사용할 수 있으며 실제 API의 서버 권한 검사는 별도로 유지됩니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200", description = "내 프로젝트 권한을 포함한 상세 조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401", description = "로그인 필요(UNAUTHORIZED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403", description = "프로젝트 참여 권한 없음(PROJECT_ACCESS_DENIED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404", description = "프로젝트가 없거나 삭제됨(PROJECT_NOT_FOUND)")
+    })
     @GetMapping("/{projectId}")
     public ApiResponse<ProjectResponse> getProject(
             @AuthenticationPrincipal MemberDetails memberDetails,
