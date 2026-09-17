@@ -85,7 +85,16 @@ public class ProjectService {
         Project project = findActiveProject(projectId);
         ProjectMember projectMember = findJoinedMember(memberId, projectId);
         validateOwner(projectMember);
-        validateDateRange(request.getStartDate(), request.getEndDate());
+
+        if (project.isCompleted()) {
+            throw new CustomException(ErrorCode.PROJECT_ALREADY_COMPLETED);
+        }
+
+        LocalDate updatedStartDate = request.getStartDate() == null
+                ? project.getStartDate() : request.getStartDate();
+        LocalDate updatedEndDate = request.getEndDate() == null
+                ? project.getEndDate() : request.getEndDate();
+        validateDateRange(updatedStartDate, updatedEndDate);
 
         project.update(
                 request.getName(),

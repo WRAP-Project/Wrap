@@ -168,6 +168,73 @@ class ProjectTest {
         );
     }
 
+    @Test
+    void 이름만_수정하면_다른_정보는_유지한다() {
+        Project project = createProject();
+
+        project.update("  새 이름  ", null, null, null, null, null, null);
+
+        assertEquals("새 이름", project.getName());
+        assertEquals("프로젝트 설명", project.getDescription());
+        assertEquals("프로젝트 목표", project.getGoal());
+        assertEquals("성공 기준", project.getSuccessCriteria());
+        assertEquals(LocalDate.of(2026, 7, 1), project.getStartDate());
+        assertEquals(LocalDate.of(2026, 8, 31), project.getEndDate());
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
+    }
+
+    @Test
+    void 모든_수정값이_null이면_기존_정보를_유지한다() {
+        Project project = createProject();
+
+        project.update(null, null, null, null, null, null, null);
+
+        assertEquals("Wrap", project.getName());
+        assertEquals("프로젝트 설명", project.getDescription());
+        assertEquals("프로젝트 목표", project.getGoal());
+        assertEquals("성공 기준", project.getSuccessCriteria());
+        assertEquals(LocalDate.of(2026, 7, 1), project.getStartDate());
+        assertEquals(LocalDate.of(2026, 8, 31), project.getEndDate());
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
+    }
+
+    @Test
+    void 선택_문자열은_빈_문자열이나_공백으로_지울_수_있다() {
+        Project project = createProject();
+
+        project.update(null, "", "  ", "\t", null, null, null);
+
+        assertNull(project.getDescription());
+        assertNull(project.getGoal());
+        assertNull(project.getSuccessCriteria());
+        assertEquals("Wrap", project.getName());
+    }
+
+    @Test
+    void 시작일만_수정해도_기존_종료일과_비교한다() {
+        Project project = createProject();
+
+        assertThrows(IllegalArgumentException.class, () -> project.update(
+                "새 이름", "", null, null, LocalDate.of(2026, 9, 1), null, null));
+
+        assertEquals("Wrap", project.getName());
+        assertEquals("프로젝트 설명", project.getDescription());
+        assertEquals(LocalDate.of(2026, 7, 1), project.getStartDate());
+        assertEquals(LocalDate.of(2026, 8, 31), project.getEndDate());
+    }
+
+    @Test
+    void 종료일만_수정해도_기존_시작일과_비교한다() {
+        Project project = createProject();
+
+        assertThrows(IllegalArgumentException.class, () -> project.update(
+                null, null, null, null, null, LocalDate.of(2026, 6, 30), "#A78BFA"));
+
+        assertEquals(Project.DEFAULT_COLOR, project.getColor());
+        assertEquals(LocalDate.of(2026, 7, 1), project.getStartDate());
+        assertEquals(LocalDate.of(2026, 8, 31), project.getEndDate());
+    }
+
     private Project createProject() {
         return Project.create(
                 "  Wrap  ",

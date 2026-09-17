@@ -90,6 +90,10 @@ public class Project {
         return project;
     }
 
+    /**
+     * null은 기존 값을 유지하고, 선택 문자열의 빈 값은 해당 내용을 삭제합니다.
+     * 모든 변경 값을 검증한 뒤 반영하여 검증 실패 시 기존 상태를 유지합니다.
+     */
     public void update(
             String name,
             String description,
@@ -99,19 +103,24 @@ public class Project {
             LocalDate endDate,
             String color
     ) {
-        String normalizedName = normalizeRequiredName(name);
-        String normalizedDescription = normalizeOptional(description, "프로젝트 설명");
-        String normalizedGoal = normalizeOptional(goal, "프로젝트 목표");
-        String normalizedSuccessCriteria = normalizeOptional(successCriteria, "성공 기준");
+        String normalizedName = name == null ? this.name : normalizeRequiredName(name);
+        String normalizedDescription = description == null
+                ? this.description : normalizeOptional(description, "프로젝트 설명");
+        String normalizedGoal = goal == null
+                ? this.goal : normalizeOptional(goal, "프로젝트 목표");
+        String normalizedSuccessCriteria = successCriteria == null
+                ? this.successCriteria : normalizeOptional(successCriteria, "성공 기준");
         String normalizedColor = color == null ? this.color : validateColor(color);
-        validateDateRange(startDate, endDate);
+        LocalDate updatedStartDate = startDate == null ? this.startDate : startDate;
+        LocalDate updatedEndDate = endDate == null ? this.endDate : endDate;
+        validateDateRange(updatedStartDate, updatedEndDate);
 
         this.name = normalizedName;
         this.description = normalizedDescription;
         this.goal = normalizedGoal;
         this.successCriteria = normalizedSuccessCriteria;
-        this.startDate = startDate;
-        this.endDate = endDate;
+        this.startDate = updatedStartDate;
+        this.endDate = updatedEndDate;
         this.color = normalizedColor;
     }
 
