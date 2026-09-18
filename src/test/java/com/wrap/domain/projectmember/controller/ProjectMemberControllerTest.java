@@ -2,6 +2,7 @@ package com.wrap.domain.projectmember.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,8 @@ import com.wrap.domain.projectmember.dto.response.ProjectMemberResponse;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.service.ProjectMemberService;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
 import java.time.LocalDateTime;
@@ -217,6 +220,48 @@ class ProjectMemberControllerTest {
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void demotingLastOwnerReturnsConflict() throws Exception {
+        when(projectMemberService.changeRole(
+                eq(1L), eq(10L), eq(100L), any(ProjectMemberRoleUpdateRequest.class)
+        )).thenThrow(new CustomException(ErrorCode.LAST_PROJECT_OWNER));
+
+        mockMvc.perform(patch("/projects/10/members/100/role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"MEMBER\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("LAST_PROJECT_OWNER"));
+    }
+
+    @Test
+    void lastOwnerLeavingReturnsConflict() throws Exception {
+        doThrow(new CustomException(ErrorCode.LAST_PROJECT_OWNER))
+                .when(projectMemberService).leaveProject(1L, 10L);
+
+        mockMvc.perform(delete("/projects/10/members/me")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("LAST_PROJECT_OWNER"));
+    }
+
+    @Test
+    void removingOwnerReturnsConflict() throws Exception {
+        doThrow(new CustomException(ErrorCode.PROJECT_OWNER_CANNOT_BE_REMOVED))
+                .when(projectMemberService).removeMember(1L, 10L, 200L);
+
+        mockMvc.perform(delete("/projects/10/members/200")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("PROJECT_OWNER_CANNOT_BE_REMOVED"));
     }
 
     private MemberDetails memberDetails(Long memberId) {

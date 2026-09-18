@@ -41,7 +41,7 @@ public class ProjectMemberService {
             Long projectMemberId,
             ProjectMemberRoleUpdateRequest request
     ) {
-        Project project = findActiveProject(projectId);
+        Project project = findActiveProjectForUpdate(projectId);
         ProjectMember requester = findJoinedMember(memberId, projectId);
         validateOwner(requester);
         validateProjectInProgress(project);
@@ -63,7 +63,7 @@ public class ProjectMemberService {
 
     @Transactional
     public void leaveProject(Long memberId, Long projectId) {
-        Project project = findActiveProject(projectId);
+        Project project = findActiveProjectForUpdate(projectId);
         ProjectMember projectMember = findJoinedMember(memberId, projectId);
         validateProjectInProgress(project);
 
@@ -76,7 +76,7 @@ public class ProjectMemberService {
 
     @Transactional
     public void removeMember(Long memberId, Long projectId, Long projectMemberId) {
-        Project project = findActiveProject(projectId);
+        Project project = findActiveProjectForUpdate(projectId);
         ProjectMember requester = findJoinedMember(memberId, projectId);
         validateOwner(requester);
         validateProjectInProgress(project);
@@ -91,6 +91,12 @@ public class ProjectMemberService {
 
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    // 멤버 정보를 읽기 전에 프로젝트 잠금을 획득해 권한 검사와 변경을 직렬화합니다.
+    private Project findActiveProjectForUpdate(Long projectId) {
+        return projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
     }
 

@@ -3,6 +3,7 @@ package com.wrap.domain.projectmember.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -24,6 +25,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -152,7 +156,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.MEMBER
         );
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.OWNER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -180,7 +184,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.OWNER
         );
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.MEMBER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -200,6 +204,14 @@ class ProjectMemberServiceTest {
 
         assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
         assertThat(requester.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
+        order.verify(projectMemberRepository).findByIdAndProjectId(100L, 10L);
+        order.verify(projectMemberRepository).countByProjectIdAndRoleAndStatus(
+                10L, ProjectMemberRole.OWNER, ProjectMemberStatus.JOINED);
     }
 
     @Test
@@ -213,7 +225,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.OWNER
         );
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.MEMBER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -250,7 +262,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.MEMBER
         );
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.OWNER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -279,7 +291,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.OWNER
         );
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.OWNER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -314,7 +326,7 @@ class ProjectMemberServiceTest {
         );
         target.leave();
         ProjectMemberRoleUpdateRequest request = roleRequest(ProjectMemberRole.OWNER);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -343,7 +355,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -354,6 +366,11 @@ class ProjectMemberServiceTest {
         projectMemberService.leaveProject(1L, 10L);
 
         assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
     }
 
     @Test
@@ -366,7 +383,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.OWNER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -382,6 +399,11 @@ class ProjectMemberServiceTest {
         projectMemberService.leaveProject(1L, 10L);
 
         assertThat(projectMember.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
     }
 
     @Test
@@ -394,7 +416,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.OWNER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -427,7 +449,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -460,7 +482,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -473,6 +495,12 @@ class ProjectMemberServiceTest {
         projectMemberService.removeMember(1L, 10L, 200L);
 
         assertThat(target.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
+        order.verify(projectMemberRepository).findByIdAndProjectId(200L, 10L);
     }
 
     @Test
@@ -485,7 +513,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -511,7 +539,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.OWNER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -542,7 +570,7 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.OWNER
         );
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -578,7 +606,7 @@ class ProjectMemberServiceTest {
                 ProjectMemberRole.MEMBER
         );
         target.leave();
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
@@ -593,6 +621,55 @@ class ProjectMemberServiceTest {
                 .satisfies(exception -> assertThat(
                         ((CustomException) exception).getErrorCode()
                 ).isEqualTo(ErrorCode.PROJECT_MEMBER_NOT_FOUND));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"changeRole", "leaveProject", "removeMember"})
+    @DisplayName("변경 요청은 잠금 조회에서 프로젝트가 없으면 멤버를 조회하지 않는다")
+    void mutation_projectNotFound(String operation) {
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> invokeMutation(operation))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_NOT_FOUND));
+
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"changeRole", "leaveProject", "removeMember"})
+    @DisplayName("변경 요청은 프로젝트 잠금 후 요청자의 참여 여부를 확인한다")
+    void mutation_requesterNoLongerJoined(String operation) {
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project(10L)));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED
+        )).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> invokeMutation(operation))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ACCESS_DENIED));
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
+        order.verifyNoMoreInteractions();
+    }
+
+    private void invokeMutation(String operation) {
+        switch (operation) {
+            case "changeRole" -> projectMemberService.changeRole(
+                    1L, 10L, 200L, roleRequest(ProjectMemberRole.MEMBER));
+            case "leaveProject" -> projectMemberService.leaveProject(1L, 10L);
+            case "removeMember" -> projectMemberService.removeMember(1L, 10L, 200L);
+            default -> throw new IllegalArgumentException(operation);
+        }
     }
 
     private Member member(Long id, String nickname, String profileImage) {
