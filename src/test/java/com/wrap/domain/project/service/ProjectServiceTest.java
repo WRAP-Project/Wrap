@@ -32,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -69,6 +70,8 @@ class ProjectServiceTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         ProjectResponse response = projectService.create(1L, request);
+
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
 
         assertThat(response.getName()).isEqualTo("Wrap");
         assertThat(response.getColor()).isEqualTo("#A78BFA");
@@ -131,6 +134,7 @@ class ProjectServiceTest {
         Member member = mock(Member.class);
         Project wrap = project(10L, "Wrap");
         Project graduation = project(20L, "Graduation");
+        graduation.complete(LocalDateTime.of(2026, 8, 31, 18, 0));
         LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 1, 9, 0);
         List<ProjectMember> memberships = List.of(
                 ProjectMember.createOwner(member, wrap, joinedAt),
@@ -143,7 +147,7 @@ class ProjectServiceTest {
                 ))
                 .willReturn(memberships);
 
-        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L);
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L, null);
 
         assertThat(responses).hasSize(2);
         assertThat(responses)
@@ -154,7 +158,7 @@ class ProjectServiceTest {
                 .containsExactly("Wrap", "Graduation");
         assertThat(responses)
                 .extracting(ProjectSummaryResponse::getStatus)
-                .containsOnly(ProjectStatus.IN_PROGRESS);
+                .containsExactly(ProjectStatus.IN_PROGRESS, ProjectStatus.COMPLETED);
         assertThat(responses)
                 .extracting(ProjectSummaryResponse::getColor)
                 .containsOnly(Project.DEFAULT_COLOR);
@@ -176,7 +180,7 @@ class ProjectServiceTest {
                 ))
                 .willReturn(List.of());
 
-        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L);
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L, null);
 
         assertThat(responses).isEmpty();
         verify(projectMemberRepository)
@@ -206,6 +210,8 @@ class ProjectServiceTest {
         )).willReturn(Optional.of(membership));
 
         ProjectResponse response = projectService.getProject(1L, 10L);
+
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
 
         assertThat(response.getId()).isEqualTo(10L);
         assertThat(response.getName()).isEqualTo("Wrap");
@@ -290,6 +296,8 @@ class ProjectServiceTest {
         )).willReturn(Optional.of(owner));
 
         ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
 
         assertThat(response.getName()).isEqualTo("Updated Wrap");
         assertThat(response.getDescription()).isEqualTo("Updated description");
@@ -395,6 +403,8 @@ class ProjectServiceTest {
 
         ProjectResponse response = projectService.complete(1L, 10L);
 
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
+
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.COMPLETED);
         assertThat(response.getCompletedAt()).isNotNull();
         assertThat(project.isCompleted()).isTrue();
@@ -486,6 +496,8 @@ class ProjectServiceTest {
         )).willReturn(Optional.of(owner));
 
         ProjectResponse response = projectService.reopen(1L, 10L);
+
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
 
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(response.getCompletedAt()).isNull();
@@ -645,6 +657,8 @@ class ProjectServiceTest {
 
         ProjectResponse response = projectService.update(1L, 10L, request);
 
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
+
         assertThat(response.getColor()).isEqualTo("#A78BFA");
         assertThat(response.getName()).isEqualTo("Wrap");
         assertThat(response.getDescription()).isEqualTo("프로젝트 설명");
@@ -668,6 +682,8 @@ class ProjectServiceTest {
         ReflectionTestUtils.setField(request, field, value);
 
         ProjectResponse response = projectService.update(1L, 10L, request);
+
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
 
         assertThat(response.getStartDate()).isEqualTo(expectedStart);
         assertThat(response.getEndDate()).isEqualTo(expectedEnd);
@@ -733,6 +749,8 @@ class ProjectServiceTest {
         projectService.reopen(1L, 10L);
         ProjectResponse response = projectService.update(1L, 10L, request);
 
+        assertThat(response.getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
+
         assertThat(response.getName()).isEqualTo("Reopened Wrap");
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(project.getCompletedAt()).isNull();
@@ -759,6 +777,64 @@ class ProjectServiceTest {
                 .satisfies(exception -> assertThat(
                         ((CustomException) exception).getErrorCode()
                 ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectStatus.class)
+    @DisplayName("상태 필터로 조회한 프로젝트를 요약 응답으로 반환한다")
+    void getMyProjects_withStatus(ProjectStatus status) {
+        Project project = project(10L, "Wrap");
+        if (status == ProjectStatus.COMPLETED) {
+            project.complete(LocalDateTime.of(2026, 8, 31, 18, 0));
+        }
+        ProjectMember membership = ProjectMember.createOwner(
+                mock(Member.class), project, LocalDateTime.of(2026, 7, 1, 9, 0));
+        given(projectMemberRepository.findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
+                1L, ProjectMemberStatus.JOINED, status
+        )).willReturn(List.of(membership));
+
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L, status);
+
+        assertThat(responses).extracting(ProjectSummaryResponse::getId).containsExactly(10L);
+        assertThat(responses).extracting(ProjectSummaryResponse::getStatus).containsExactly(status);
+        verify(projectMemberRepository, never())
+                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectStatus.class)
+    @DisplayName("해당 상태의 프로젝트가 없으면 빈 목록을 반환한다")
+    void getMyProjects_withStatusEmpty(ProjectStatus status) {
+        given(projectMemberRepository.findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
+                1L, ProjectMemberStatus.JOINED, status
+        )).willReturn(List.of());
+
+        assertThat(projectService.getMyProjects(1L, status)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("같은 프로젝트를 조회해도 요청자마다 자신의 현재 권한을 반환한다")
+    void getProject_returnsRequestingMembersCurrentRole() {
+        Project project = project(10L, "Wrap");
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 1, 9, 0);
+        ProjectMember owner = ProjectMember.createOwner(mock(Member.class), project, joinedAt);
+        ProjectMember member = ProjectMember.join(
+                mock(Member.class), project, ProjectMemberRole.MEMBER, joinedAt);
+        given(projectRepository.findByIdAndDeletedAtIsNull(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(owner));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                2L, 10L, ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(member));
+
+        assertThat(projectService.getProject(1L, 10L).getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
+        assertThat(projectService.getProject(2L, 10L).getMyRole()).isEqualTo(ProjectMemberRole.MEMBER);
+
+        member.changeRole(ProjectMemberRole.OWNER);
+
+        assertThat(projectService.getProject(2L, 10L).getMyRole()).isEqualTo(ProjectMemberRole.OWNER);
     }
 
     private void givenUpdateOwner(Project project) {

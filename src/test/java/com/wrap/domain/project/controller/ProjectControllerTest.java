@@ -22,6 +22,7 @@ import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.service.ProjectService;
+import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import com.wrap.global.security.MemberDetails;
@@ -31,6 +32,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -52,6 +54,7 @@ class ProjectControllerTest {
     @Test
     void createReturnsCreatedAndUsesAuthenticatedMemberId() throws Exception {
         ProjectResponse response = ProjectResponse.builder()
+                .myRole(ProjectMemberRole.OWNER)
                 .id(10L)
                 .name("Wrap")
                 .startDate(LocalDate.of(2026, 7, 1))
@@ -73,6 +76,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.name").value("Wrap"))
                 .andExpect(jsonPath("$.data.color").value("#CDEA6F"))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.myRole").value("OWNER"))
                 .andExpect(jsonPath("$.message").value("Project created."));
 
         verify(projectService).create(eq(1L), any(ProjectCreateRequest.class));
@@ -179,7 +183,7 @@ class ProjectControllerTest {
                         .color("#F5E03A")
                         .build()
         );
-        when(projectService.getMyProjects(1L)).thenReturn(responses);
+        when(projectService.getMyProjects(1L, null)).thenReturn(responses);
 
         mockMvc.perform(get("/projects")
                         .with(user(memberDetails(1L))))
@@ -196,7 +200,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data[1].status").value("COMPLETED"))
                 .andExpect(jsonPath("$.message").value("My projects retrieved."));
 
-        verify(projectService).getMyProjects(1L);
+        verify(projectService).getMyProjects(1L, null);
     }
 
     @Test
@@ -209,9 +213,11 @@ class ProjectControllerTest {
         verifyNoInteractions(projectService);
     }
 
-    @Test
-    void getProjectReturnsDetailAndUsesAuthenticatedMemberId() throws Exception {
+    @ParameterizedTest
+    @EnumSource(ProjectMemberRole.class)
+    void getProjectReturnsDetailAndUsesAuthenticatedMemberId(ProjectMemberRole role) throws Exception {
         ProjectResponse response = ProjectResponse.builder()
+                .myRole(role)
                 .id(10L)
                 .name("Wrap")
                 .description("Project description")
@@ -235,6 +241,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.successCriteria").value("Success criteria"))
                 .andExpect(jsonPath("$.data.color").value("#A78BFA"))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.myRole").value(role.name()))
                 .andExpect(jsonPath("$.message").value("Project retrieved."));
 
         verify(projectService).getProject(1L, 10L);
@@ -253,6 +260,7 @@ class ProjectControllerTest {
     @Test
     void updateReturnsUpdatedProjectAndUsesAuthenticatedMemberId() throws Exception {
         ProjectResponse response = ProjectResponse.builder()
+                .myRole(ProjectMemberRole.OWNER)
                 .id(10L)
                 .name("Updated Wrap")
                 .description("Updated description")
@@ -279,6 +287,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.goal").value("Updated goal"))
                 .andExpect(jsonPath("$.data.successCriteria").value("Updated criteria"))
                 .andExpect(jsonPath("$.data.color").value("#60C8F5"))
+                .andExpect(jsonPath("$.data.myRole").value("OWNER"))
                 .andExpect(jsonPath("$.message").value("Project updated."));
 
         verify(projectService).update(eq(1L), eq(10L), any(ProjectUpdateRequest.class));
@@ -345,6 +354,7 @@ class ProjectControllerTest {
     @Test
     void completeReturnsCompletedProjectAndUsesAuthenticatedMemberId() throws Exception {
         ProjectResponse response = ProjectResponse.builder()
+                .myRole(ProjectMemberRole.OWNER)
                 .id(10L)
                 .name("Wrap")
                 .status(ProjectStatus.COMPLETED)
@@ -359,6 +369,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.id").value(10))
                 .andExpect(jsonPath("$.data.name").value("Wrap"))
                 .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.myRole").value("OWNER"))
                 .andExpect(jsonPath("$.message").value("Project completed."));
 
         verify(projectService).complete(1L, 10L);
@@ -378,6 +389,7 @@ class ProjectControllerTest {
     @Test
     void reopenReturnsInProgressProjectAndUsesAuthenticatedMemberId() throws Exception {
         ProjectResponse response = ProjectResponse.builder()
+                .myRole(ProjectMemberRole.OWNER)
                 .id(10L)
                 .name("Wrap")
                 .status(ProjectStatus.IN_PROGRESS)
@@ -394,6 +406,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data.name").value("Wrap"))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.data.completedAt").doesNotExist())
+                .andExpect(jsonPath("$.data.myRole").value("OWNER"))
                 .andExpect(jsonPath("$.message").value("Project reopened."));
 
         verify(projectService).reopen(1L, 10L);
@@ -493,6 +506,45 @@ class ProjectControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("PROJECT_ALREADY_COMPLETED"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectStatus.class)
+    void getMyProjectsWithStatusPassesFilter(ProjectStatus projectStatus) throws Exception {
+        when(projectService.getMyProjects(1L, projectStatus)).thenReturn(List.of(
+                ProjectSummaryResponse.builder()
+                        .id(10L).name("Wrap").status(projectStatus).build()));
+
+        mockMvc.perform(get("/projects")
+                        .param("status", projectStatus.name())
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].status").value(projectStatus.name()));
+
+        verify(projectService).getMyProjects(1L, projectStatus);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNKNOWN", "completed", "OWNER"})
+    void getMyProjectsWithInvalidStatusReturnsBadRequest(String value) throws Exception {
+        mockMvc.perform(get("/projects")
+                        .param("status", value)
+                        .with(user(memberDetails(1L))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.error.details[0].field").value("status"));
+
+        verifyNoInteractions(projectService);
+    }
+
+    @Test
+    void getMyProjectsWithStatusWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/projects").param("status", "COMPLETED"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectService);
     }
 
     private MemberDetails memberDetails(Long memberId) {

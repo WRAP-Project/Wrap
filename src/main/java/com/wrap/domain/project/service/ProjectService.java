@@ -7,6 +7,7 @@ import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
+import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
@@ -53,17 +54,18 @@ public class ProjectService {
         );
         projectMemberRepository.save(owner);
 
-        return ProjectResponse.from(savedProject);
+        return ProjectResponse.from(savedProject, owner.getRole());
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectSummaryResponse> getMyProjects(Long memberId) {
-        return projectMemberRepository
-                .findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
-                        memberId,
-                        ProjectMemberStatus.JOINED
-                )
-                .stream()
+    public List<ProjectSummaryResponse> getMyProjects(Long memberId, ProjectStatus status) {
+        List<ProjectMember> memberships = status == null
+                ? projectMemberRepository.findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                        memberId, ProjectMemberStatus.JOINED)
+                : projectMemberRepository.findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
+                        memberId, ProjectMemberStatus.JOINED, status);
+
+        return memberships.stream()
                 .map(ProjectMember::getProject)
                 .map(ProjectSummaryResponse::from)
                 .toList();
@@ -72,8 +74,8 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public ProjectResponse getProject(Long memberId, Long projectId) {
         Project project = findActiveProject(projectId);
-        findJoinedMember(memberId, projectId);
-        return ProjectResponse.from(project);
+        ProjectMember projectMember = findJoinedMember(memberId, projectId);
+        return ProjectResponse.from(project, projectMember.getRole());
     }
 
     @Transactional
@@ -106,7 +108,7 @@ public class ProjectService {
                 request.getColor()
         );
 
-        return ProjectResponse.from(project);
+        return ProjectResponse.from(project, projectMember.getRole());
     }
 
     @Transactional
@@ -120,7 +122,7 @@ public class ProjectService {
         }
 
         project.complete(LocalDateTime.now());
-        return ProjectResponse.from(project);
+        return ProjectResponse.from(project, projectMember.getRole());
     }
 
     @Transactional
@@ -134,7 +136,7 @@ public class ProjectService {
         }
 
         project.reopen();
-        return ProjectResponse.from(project);
+        return ProjectResponse.from(project, projectMember.getRole());
     }
 
     @Transactional

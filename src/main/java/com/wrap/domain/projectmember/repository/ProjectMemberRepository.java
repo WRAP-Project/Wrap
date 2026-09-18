@@ -1,5 +1,6 @@
 package com.wrap.domain.projectmember.repository;
 
+import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
@@ -17,6 +18,12 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     List<ProjectMember> findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
             Long memberId,
             ProjectMemberStatus status
+    );
+
+    List<ProjectMember> findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
+            Long memberId,
+            ProjectMemberStatus status,
+            ProjectStatus projectStatus
     );
 
     Optional<ProjectMember> findByIdAndProjectId(
