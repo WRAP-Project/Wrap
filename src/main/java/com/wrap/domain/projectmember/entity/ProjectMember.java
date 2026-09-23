@@ -36,6 +36,8 @@ import org.hibernate.annotations.CreationTimestamp;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProjectMember {
 
+    private static final int MAX_WORK_ROLE_LENGTH = 50;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -51,6 +53,9 @@ public class ProjectMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ProjectMemberRole role;
+
+    @Column(name = "work_role", length = MAX_WORK_ROLE_LENGTH)
+    private String workRole;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -95,6 +100,14 @@ public class ProjectMember {
         this.role = requireRole(newRole);
     }
 
+    public void changeWorkRole(String newWorkRole) {
+        requireJoinedMember();
+        if (newWorkRole == null) {
+            throw new IllegalArgumentException("프로젝트 업무 역할은 필수입니다.");
+        }
+        this.workRole = normalizeWorkRole(newWorkRole);
+    }
+
     public void leave() {
         requireJoinedMember();
         this.status = ProjectMemberStatus.LEFT;
@@ -122,6 +135,7 @@ public class ProjectMember {
         projectMember.member = requireMember(member);
         projectMember.project = requireProject(project);
         projectMember.role = requireRole(role);
+        projectMember.workRole = normalizeNullableWorkRole(member.getRole());
         projectMember.status = ProjectMemberStatus.JOINED;
         projectMember.joinedAt = requireJoinedAt(joinedAt);
         return projectMember;
@@ -159,5 +173,20 @@ public class ProjectMember {
             throw new IllegalArgumentException("프로젝트 참여 시각은 필수입니다.");
         }
         return joinedAt;
+    }
+
+    private static String normalizeNullableWorkRole(String workRole) {
+        return workRole == null ? null : normalizeWorkRole(workRole);
+    }
+
+    private static String normalizeWorkRole(String workRole) {
+        String normalized = workRole.strip();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() > MAX_WORK_ROLE_LENGTH) {
+            throw new IllegalArgumentException("프로젝트 업무 역할은 50자를 초과할 수 없습니다.");
+        }
+        return normalized;
     }
 }

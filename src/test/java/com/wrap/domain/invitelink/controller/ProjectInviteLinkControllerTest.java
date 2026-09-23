@@ -176,6 +176,7 @@ class ProjectInviteLinkControllerTest {
                 .projectMemberId(200L)
                 .memberId(2L)
                 .role(ProjectMemberRole.MEMBER)
+                .workRole("프론트엔드")
                 .status(ProjectMemberStatus.JOINED)
                 .joinedAt(LocalDateTime.of(2026, 9, 1, 12, 0))
                 .build();
@@ -191,6 +192,7 @@ class ProjectInviteLinkControllerTest {
                 .andExpect(jsonPath("$.data.projectMemberId").value(200))
                 .andExpect(jsonPath("$.data.memberId").value(2))
                 .andExpect(jsonPath("$.data.role").value("MEMBER"))
+                .andExpect(jsonPath("$.data.workRole").value("프론트엔드"))
                 .andExpect(jsonPath("$.data.status").value("JOINED"))
                 .andExpect(jsonPath("$.message")
                         .value("Joined project through invite link."));

@@ -16,6 +16,7 @@ public class ProjectMemberResponse {
     private String nickname;
     private String profileImage;
     private ProjectMemberRole role;
+    private String workRole;
     private ProjectMemberStatus status;
     private LocalDateTime joinedAt;
 
@@ -26,6 +27,7 @@ public class ProjectMemberResponse {
                 .nickname(projectMember.getMember().getNickname())
                 .profileImage(projectMember.getMember().getProfileImage())
                 .role(projectMember.getRole())
+                .workRole(projectMember.getWorkRole())
                 .status(projectMember.getStatus())
                 .joinedAt(projectMember.getJoinedAt())
                 .build();
