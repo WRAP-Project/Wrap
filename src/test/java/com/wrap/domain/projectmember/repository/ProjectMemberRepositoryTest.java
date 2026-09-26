@@ -13,6 +13,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullSource;
@@ -70,6 +71,33 @@ class ProjectMemberRepositoryTest {
                 : new Long[]{status == ProjectStatus.IN_PROGRESS ? inProgress.getId() : completed.getId()};
         assertThat(results).extracting(membership -> membership.getProject().getId())
                 .containsExactlyInAnyOrder(expectedIds);
+    }
+
+    @Test
+    void savesAndLoadsWorkRole() {
+        Member member = member("work-role@example.com");
+        member.updateProfile(null, null, "  백엔드  ", null, null);
+        Project project = project("Work role", ProjectStatus.IN_PROGRESS);
+
+        ProjectMember saved = join(member, project, ProjectMemberRole.MEMBER);
+        entityManager.flush();
+        entityManager.clear();
+
+        ProjectMember found = projectMemberRepository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getWorkRole()).isEqualTo("백엔드");
+    }
+
+    @Test
+    void savesAndLoadsNullWorkRole() {
+        Member member = member("no-work-role@example.com");
+        Project project = project("No work role", ProjectStatus.IN_PROGRESS);
+
+        ProjectMember saved = join(member, project, ProjectMemberRole.MEMBER);
+        entityManager.flush();
+        entityManager.clear();
+
+        ProjectMember found = projectMemberRepository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getWorkRole()).isNull();
     }
 
     private Member member(String email) {

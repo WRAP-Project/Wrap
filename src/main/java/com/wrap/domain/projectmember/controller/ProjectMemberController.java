@@ -1,6 +1,7 @@
 package com.wrap.domain.projectmember.controller;
 
 import com.wrap.domain.projectmember.dto.request.ProjectMemberRoleUpdateRequest;
+import com.wrap.domain.projectmember.dto.request.ProjectMemberWorkRoleUpdateRequest;
 import com.wrap.domain.projectmember.dto.response.ProjectMemberResponse;
 import com.wrap.domain.projectmember.service.ProjectMemberService;
 import com.wrap.global.common.ApiResponse;
@@ -85,6 +86,50 @@ public class ProjectMemberController {
                         request
                 ),
                 "Project member role updated."
+        );
+    }
+
+    @Operation(
+            summary = "프로젝트 멤버 업무 역할 변경",
+            description = """
+                    진행 중인 프로젝트의 참여 중인(JOINED) OWNER가 참여 중인 팀원의 프로젝트별 업무 역할을 변경합니다.
+                    본인을 포함한 같은 프로젝트의 팀원만 변경할 수 있습니다.
+                    빈 문자열이나 공백만 입력하면 업무 역할 미지정(null) 상태로 변경됩니다.
+                    OWNER/MEMBER 관리 권한은 변경되지 않습니다.
+                    같은 프로젝트의 탈퇴·권한 변경·내보내기와 직렬화하여 처리 시점의 최신 참여 상태와 권한을 검사합니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200", description = "프로젝트 멤버 업무 역할 변경 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400", description = "입력값 검증 실패(VALIDATION_FAILED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401", description = "로그인 필요(UNAUTHORIZED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "참여 권한 없음(PROJECT_ACCESS_DENIED) 또는 OWNER 권한 필요(PROJECT_OWNER_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트 없음(PROJECT_NOT_FOUND) 또는 참여 중인 대상 멤버 없음(PROJECT_MEMBER_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409", description = "완료 프로젝트(PROJECT_ALREADY_COMPLETED)")
+    })
+    @PatchMapping("/{projectMemberId}/work-role")
+    public ApiResponse<ProjectMemberResponse> changeWorkRole(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId,
+            @PathVariable Long projectMemberId,
+            @Valid @RequestBody ProjectMemberWorkRoleUpdateRequest request
+    ) {
+        return ApiResponse.success(
+                projectMemberService.changeWorkRole(
+                        memberDetails.getMemberId(),
+                        projectId,
+                        projectMemberId,
+                        request
+                ),
+                "Project member work role updated."
         );
     }
 

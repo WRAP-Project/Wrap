@@ -11,6 +11,7 @@ import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.dto.request.ProjectMemberRoleUpdateRequest;
+import com.wrap.domain.projectmember.dto.request.ProjectMemberWorkRoleUpdateRequest;
 import com.wrap.domain.projectmember.dto.response.ProjectMemberResponse;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
@@ -64,6 +65,8 @@ class ProjectMemberServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
+        owner.changeWorkRole("PM");
+        member.changeWorkRole("프론트엔드");
         given(projectRepository.findByIdAndDeletedAtIsNull(10L))
                 .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
@@ -89,6 +92,9 @@ class ProjectMemberServiceTest {
         assertThat(responses)
                 .extracting(ProjectMemberResponse::getRole)
                 .containsExactly(ProjectMemberRole.OWNER, ProjectMemberRole.MEMBER);
+        assertThat(responses)
+                .extracting(ProjectMemberResponse::getWorkRole)
+                .containsExactly("PM", "프론트엔드");
         assertThat(responses)
                 .extracting(ProjectMemberResponse::getStatus)
                 .containsOnly(ProjectMemberStatus.JOINED);
@@ -339,6 +345,190 @@ class ProjectMemberServiceTest {
         assertThatThrownBy(() ->
                 projectMemberService.changeRole(1L, 10L, 200L, request)
         )
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_MEMBER_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("프로젝트 업무 역할 변경 성공 - OWNER가 팀원의 자유 입력 역할을 변경한다")
+    void changeWorkRole_customRole_success() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        ProjectMember target = projectMember(
+                200L,
+                member(2L, "target", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        ProjectMemberWorkRoleUpdateRequest request = workRoleRequest("  프론트엔드  ");
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(200L, 10L))
+                .willReturn(Optional.of(target));
+
+        ProjectMemberResponse response = projectMemberService.changeWorkRole(
+                1L,
+                10L,
+                200L,
+                request
+        );
+
+        assertThat(response.getWorkRole()).isEqualTo("프론트엔드");
+        assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(target.getWorkRole()).isEqualTo("프론트엔드");
+
+        InOrder order = inOrder(projectRepository, projectMemberRepository);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L, 10L, ProjectMemberStatus.JOINED);
+        order.verify(projectMemberRepository).findByIdAndProjectId(200L, 10L);
+    }
+
+    @Test
+    @DisplayName("프로젝트 업무 역할 변경 성공 - OWNER가 자신의 역할을 미지정으로 변경한다")
+    void changeWorkRole_selfClear_success() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        requester.changeWorkRole("PM");
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(100L, 10L))
+                .willReturn(Optional.of(requester));
+
+        ProjectMemberResponse response = projectMemberService.changeWorkRole(
+                1L,
+                10L,
+                100L,
+                workRoleRequest("   ")
+        );
+
+        assertThat(response.getWorkRole()).isNull();
+        assertThat(response.getRole()).isEqualTo(ProjectMemberRole.OWNER);
+        assertThat(requester.getWorkRole()).isNull();
+    }
+
+    @Test
+    @DisplayName("프로젝트 업무 역할 변경 실패 - 요청자가 OWNER가 아니다")
+    void changeWorkRole_ownerRequired() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+
+        assertThatThrownBy(() -> projectMemberService.changeWorkRole(
+                1L,
+                10L,
+                200L,
+                workRoleRequest("QA")
+        ))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED));
+
+        verify(projectMemberRepository, org.mockito.Mockito.never())
+                .findByIdAndProjectId(200L, 10L);
+    }
+
+    @Test
+    @DisplayName("프로젝트 업무 역할 변경 실패 - 완료된 프로젝트다")
+    void changeWorkRole_projectCompleted() {
+        Project project = project(10L);
+        project.complete(LocalDateTime.of(2026, 8, 1, 18, 0));
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+
+        assertThatThrownBy(() -> projectMemberService.changeWorkRole(
+                1L,
+                10L,
+                200L,
+                workRoleRequest("QA")
+        ))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(
+                        ((CustomException) exception).getErrorCode()
+                ).isEqualTo(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        verify(projectMemberRepository, org.mockito.Mockito.never())
+                .findByIdAndProjectId(200L, 10L);
+    }
+
+    @Test
+    @DisplayName("프로젝트 업무 역할 변경 실패 - 대상이 JOINED 멤버가 아니다")
+    void changeWorkRole_targetNotFound() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(
+                100L,
+                member(1L, "requester", null),
+                project,
+                ProjectMemberRole.OWNER
+        );
+        ProjectMember target = projectMember(
+                200L,
+                member(2L, "target", null),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        target.leave();
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(requester));
+        given(projectMemberRepository.findByIdAndProjectId(200L, 10L))
+                .willReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> projectMemberService.changeWorkRole(
+                1L,
+                10L,
+                200L,
+                workRoleRequest("QA")
+        ))
                 .isInstanceOf(CustomException.class)
                 .satisfies(exception -> assertThat(
                         ((CustomException) exception).getErrorCode()
@@ -624,7 +814,7 @@ class ProjectMemberServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"changeRole", "leaveProject", "removeMember"})
+    @ValueSource(strings = {"changeRole", "changeWorkRole", "leaveProject", "removeMember"})
     @DisplayName("변경 요청은 잠금 조회에서 프로젝트가 없으면 멤버를 조회하지 않는다")
     void mutation_projectNotFound(String operation) {
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
@@ -640,7 +830,7 @@ class ProjectMemberServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"changeRole", "leaveProject", "removeMember"})
+    @ValueSource(strings = {"changeRole", "changeWorkRole", "leaveProject", "removeMember"})
     @DisplayName("변경 요청은 프로젝트 잠금 후 요청자의 참여 여부를 확인한다")
     void mutation_requesterNoLongerJoined(String operation) {
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
@@ -666,6 +856,8 @@ class ProjectMemberServiceTest {
         switch (operation) {
             case "changeRole" -> projectMemberService.changeRole(
                     1L, 10L, 200L, roleRequest(ProjectMemberRole.MEMBER));
+            case "changeWorkRole" -> projectMemberService.changeWorkRole(
+                    1L, 10L, 200L, workRoleRequest("QA"));
             case "leaveProject" -> projectMemberService.leaveProject(1L, 10L);
             case "removeMember" -> projectMemberService.removeMember(1L, 10L, 200L);
             default -> throw new IllegalArgumentException(operation);
@@ -716,6 +908,13 @@ class ProjectMemberServiceTest {
     private ProjectMemberRoleUpdateRequest roleRequest(ProjectMemberRole role) {
         ProjectMemberRoleUpdateRequest request = new ProjectMemberRoleUpdateRequest();
         ReflectionTestUtils.setField(request, "role", role);
+        return request;
+    }
+
+    private ProjectMemberWorkRoleUpdateRequest workRoleRequest(String workRole) {
+        ProjectMemberWorkRoleUpdateRequest request =
+                new ProjectMemberWorkRoleUpdateRequest();
+        ReflectionTestUtils.setField(request, "workRole", workRole);
         return request;
     }
 }

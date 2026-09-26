@@ -3,6 +3,7 @@ package com.wrap.domain.projectmember.service;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.dto.request.ProjectMemberRoleUpdateRequest;
+import com.wrap.domain.projectmember.dto.request.ProjectMemberWorkRoleUpdateRequest;
 import com.wrap.domain.projectmember.dto.response.ProjectMemberResponse;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
@@ -58,6 +59,23 @@ public class ProjectMemberService {
         }
 
         target.changeRole(newRole);
+        return ProjectMemberResponse.from(target);
+    }
+
+    @Transactional
+    public ProjectMemberResponse changeWorkRole(
+            Long memberId,
+            Long projectId,
+            Long projectMemberId,
+            ProjectMemberWorkRoleUpdateRequest request
+    ) {
+        Project project = findActiveProjectForUpdate(projectId);
+        ProjectMember requester = findJoinedMember(memberId, projectId);
+        validateOwner(requester);
+        validateProjectInProgress(project);
+
+        ProjectMember target = findJoinedProjectMember(projectMemberId, projectId);
+        target.changeWorkRole(request.getWorkRole());
         return ProjectMemberResponse.from(target);
     }
 

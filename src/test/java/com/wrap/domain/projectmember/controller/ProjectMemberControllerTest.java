@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.projectmember.dto.request.ProjectMemberRoleUpdateRequest;
+import com.wrap.domain.projectmember.dto.request.ProjectMemberWorkRoleUpdateRequest;
 import com.wrap.domain.projectmember.dto.response.ProjectMemberResponse;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
@@ -55,6 +56,7 @@ class ProjectMemberControllerTest {
                         .nickname("owner")
                         .profileImage("owner.png")
                         .role(ProjectMemberRole.OWNER)
+                        .workRole("PM")
                         .status(ProjectMemberStatus.JOINED)
                         .joinedAt(LocalDateTime.of(2026, 7, 1, 9, 0))
                         .build(),
@@ -63,6 +65,7 @@ class ProjectMemberControllerTest {
                         .memberId(2L)
                         .nickname("member")
                         .role(ProjectMemberRole.MEMBER)
+                        .workRole("프론트엔드")
                         .status(ProjectMemberStatus.JOINED)
                         .joinedAt(LocalDateTime.of(2026, 7, 2, 9, 0))
                         .build()
@@ -80,10 +83,12 @@ class ProjectMemberControllerTest {
                 .andExpect(jsonPath("$.data[0].nickname").value("owner"))
                 .andExpect(jsonPath("$.data[0].profileImage").value("owner.png"))
                 .andExpect(jsonPath("$.data[0].role").value("OWNER"))
+                .andExpect(jsonPath("$.data[0].workRole").value("PM"))
                 .andExpect(jsonPath("$.data[0].status").value("JOINED"))
                 .andExpect(jsonPath("$.data[1].projectMemberId").value(200))
                 .andExpect(jsonPath("$.data[1].nickname").value("member"))
                 .andExpect(jsonPath("$.data[1].role").value("MEMBER"))
+                .andExpect(jsonPath("$.data[1].workRole").value("프론트엔드"))
                 .andExpect(jsonPath("$.message").value("Project members retrieved."));
 
         verify(projectMemberService).getProjectMembers(1L, 10L);
@@ -172,6 +177,132 @@ class ProjectMemberControllerTest {
                 .andExpect(jsonPath("$.error.details[0].field").value("role"));
 
         verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void changeWorkRoleReturnsUpdatedMemberAndUsesAuthenticatedMemberId()
+            throws Exception {
+        ProjectMemberResponse response = ProjectMemberResponse.builder()
+                .projectMemberId(200L)
+                .memberId(2L)
+                .nickname("member")
+                .role(ProjectMemberRole.MEMBER)
+                .workRole("프론트엔드")
+                .status(ProjectMemberStatus.JOINED)
+                .joinedAt(LocalDateTime.of(2026, 7, 2, 9, 0))
+                .build();
+        when(projectMemberService.changeWorkRole(
+                eq(1L),
+                eq(10L),
+                eq(200L),
+                any(ProjectMemberWorkRoleUpdateRequest.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "workRole": "프론트엔드"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.projectMemberId").value(200))
+                .andExpect(jsonPath("$.data.memberId").value(2))
+                .andExpect(jsonPath("$.data.role").value("MEMBER"))
+                .andExpect(jsonPath("$.data.workRole").value("프론트엔드"))
+                .andExpect(jsonPath("$.data.status").value("JOINED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Project member work role updated."));
+
+        verify(projectMemberService).changeWorkRole(
+                eq(1L),
+                eq(10L),
+                eq(200L),
+                any(ProjectMemberWorkRoleUpdateRequest.class)
+        );
+    }
+
+    @Test
+    void changeWorkRoleWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workRole\":\"QA\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void changeWorkRoleWithoutFieldReturnsBadRequest() throws Exception {
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("workRole"));
+
+        verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void changeWorkRoleWithNullReturnsBadRequest() throws Exception {
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workRole\":null}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("workRole"));
+
+        verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void changeWorkRoleLongerThanFiftyCharactersReturnsBadRequest() throws Exception {
+        String workRole = "a".repeat(51);
+
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workRole\":\"" + workRole + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("workRole"));
+
+        verifyNoInteractions(projectMemberService);
+    }
+
+    @Test
+    void changeWorkRoleInCompletedProjectReturnsConflict() throws Exception {
+        when(projectMemberService.changeWorkRole(
+                eq(1L),
+                eq(10L),
+                eq(200L),
+                any(ProjectMemberWorkRoleUpdateRequest.class)
+        )).thenThrow(new CustomException(ErrorCode.PROJECT_ALREADY_COMPLETED));
+
+        mockMvc.perform(patch("/projects/10/members/200/work-role")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workRole\":\"QA\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code")
+                        .value("PROJECT_ALREADY_COMPLETED"));
     }
 
     @Test

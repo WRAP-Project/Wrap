@@ -10,6 +10,7 @@ import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.dto.request.ProjectMemberRoleUpdateRequest;
+import com.wrap.domain.projectmember.dto.request.ProjectMemberWorkRoleUpdateRequest;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
@@ -151,6 +152,41 @@ class ProjectMemberConcurrencyTest {
         assertOwnerCount(fixture.projectId(), 1);
     }
 
+    @Test
+    void waitingWorkRoleChangeUsesLatestManagementPermission() throws Exception {
+        Fixture fixture = fixture(ProjectMemberRole.OWNER);
+
+        ErrorCode rejected = runOverlapping(
+                fixture.projectId(),
+                () -> changeRole(fixture, fixture.firstMemberId(),
+                        fixture.secondMembershipId(), ProjectMemberRole.MEMBER),
+                () -> changeWorkRole(fixture, fixture.secondMemberId(),
+                        fixture.firstMembershipId(), "PM"));
+
+        assertThat(rejected).isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED);
+        assertWorkRole(fixture.firstMembershipId(), null);
+        assertState(fixture.secondMembershipId(), ProjectMemberRole.MEMBER,
+                ProjectMemberStatus.JOINED);
+    }
+
+    @Test
+    void waitingWorkRoleChangeCannotUpdateRemovedMember() throws Exception {
+        Fixture fixture = fixture(ProjectMemberRole.MEMBER);
+
+        ErrorCode rejected = runOverlapping(
+                fixture.projectId(),
+                () -> service.removeMember(
+                        fixture.firstMemberId(), fixture.projectId(),
+                        fixture.secondMembershipId()),
+                () -> changeWorkRole(fixture, fixture.firstMemberId(),
+                        fixture.secondMembershipId(), "QA"));
+
+        assertThat(rejected).isEqualTo(ErrorCode.PROJECT_MEMBER_NOT_FOUND);
+        assertWorkRole(fixture.secondMembershipId(), null);
+        assertState(fixture.secondMembershipId(), ProjectMemberRole.MEMBER,
+                ProjectMemberStatus.LEFT);
+    }
+
     private ErrorCode runOverlapping(Long projectId, Runnable firstAction, Runnable secondAction)
             throws Exception {
         CountDownLatch firstChanged = new CountDownLatch(1);
@@ -235,6 +271,18 @@ class ProjectMemberConcurrencyTest {
         service.changeRole(memberId, fixture.projectId(), targetId, request);
     }
 
+    private void changeWorkRole(
+            Fixture fixture,
+            Long memberId,
+            Long targetId,
+            String workRole
+    ) {
+        ProjectMemberWorkRoleUpdateRequest request =
+                new ProjectMemberWorkRoleUpdateRequest();
+        ReflectionTestUtils.setField(request, "workRole", workRole);
+        service.changeWorkRole(memberId, fixture.projectId(), targetId, request);
+    }
+
     private void assertState(Long membershipId, ProjectMemberRole role, ProjectMemberStatus state) {
         transaction().executeWithoutResult(status -> {
             ProjectMember membership = memberships.findById(membershipId).orElseThrow();
@@ -248,6 +296,13 @@ class ProjectMemberConcurrencyTest {
                 assertThat(memberships.countByProjectIdAndRoleAndStatus(
                         projectId, ProjectMemberRole.OWNER, ProjectMemberStatus.JOINED))
                         .isEqualTo(expected));
+    }
+
+    private void assertWorkRole(Long membershipId, String expected) {
+        transaction().executeWithoutResult(status -> {
+            ProjectMember membership = memberships.findById(membershipId).orElseThrow();
+            assertThat(membership.getWorkRole()).isEqualTo(expected);
+        });
     }
 
     private TransactionTemplate transaction() {

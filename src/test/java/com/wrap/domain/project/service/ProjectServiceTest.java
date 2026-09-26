@@ -59,6 +59,7 @@ class ProjectServiceTest {
     @DisplayName("프로젝트 생성 성공 - 생성자를 OWNER로 등록한다")
     void create_success() {
         Member member = mock(Member.class);
+        given(member.getRole()).willReturn("  디자이너  ");
         ProjectCreateRequest request = createRequest(
                 "Wrap",
                 LocalDate.of(2026, 7, 1),
@@ -86,6 +87,7 @@ class ProjectServiceTest {
         assertThat(owner.getProject().getName()).isEqualTo("Wrap");
         assertThat(owner.getProject().getColor()).isEqualTo("#A78BFA");
         assertThat(owner.isJoinedOwner()).isTrue();
+        assertThat(owner.getWorkRole()).isEqualTo("디자이너");
         assertThat(owner.getJoinedAt()).isNotNull();
     }
 

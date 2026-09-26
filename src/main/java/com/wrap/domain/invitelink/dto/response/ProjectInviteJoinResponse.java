@@ -31,6 +31,12 @@ public class ProjectInviteJoinResponse {
     )
     private ProjectMemberRole role;
 
+    @Schema(
+            description = "프로젝트별 업무 역할. 미지정이면 null입니다.",
+            example = "프론트엔드"
+    )
+    private String workRole;
+
     @Schema(description = "프로젝트 참여 상태", example = "JOINED")
     private ProjectMemberStatus status;
 
@@ -44,6 +50,7 @@ public class ProjectInviteJoinResponse {
                 .projectMemberId(projectMember.getId())
                 .memberId(projectMember.getMember().getId())
                 .role(projectMember.getRole())
+                .workRole(projectMember.getWorkRole())
                 .status(projectMember.getStatus())
                 .joinedAt(projectMember.getJoinedAt())
                 .build();

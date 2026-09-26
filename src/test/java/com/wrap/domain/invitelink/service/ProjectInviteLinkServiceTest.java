@@ -495,6 +495,7 @@ class ProjectInviteLinkServiceTest {
         Project project = project(10L);
         Member creator = member(1L);
         Member joiner = member(2L, "joiner@example.com", "joiner");
+        joiner.updateProfile(null, null, "  프론트엔드  ", null, null);
         ProjectInviteLink inviteLink = inviteLink(
                 100L,
                 project,
@@ -523,6 +524,7 @@ class ProjectInviteLinkServiceTest {
         assertThat(response.getProjectMemberId()).isEqualTo(200L);
         assertThat(response.getMemberId()).isEqualTo(2L);
         assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(response.getWorkRole()).isEqualTo("프론트엔드");
         assertThat(response.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
         assertThat(response.getJoinedAt()).isNotNull();
     }
@@ -545,8 +547,10 @@ class ProjectInviteLinkServiceTest {
                 ProjectMemberRole.OWNER,
                 LocalDateTime.of(2026, 8, 1, 10, 0)
         );
+        leftMember.changeWorkRole("백엔드");
         ReflectionTestUtils.setField(leftMember, "id", 200L);
         leftMember.leave();
+        joiner.updateProfile(null, null, "QA", null, null);
         given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
         given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
                 .willReturn(Optional.of(inviteLink));
@@ -559,6 +563,7 @@ class ProjectInviteLinkServiceTest {
 
         assertThat(response.getProjectMemberId()).isEqualTo(200L);
         assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(response.getWorkRole()).isEqualTo("백엔드");
         assertThat(response.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
         verify(projectMemberRepository, never()).save(any());
     }

@@ -407,6 +407,7 @@ class InvitationServiceTest {
         Project project = project(10L);
         Member inviter = member(1L, "owner@example.com", "owner");
         Member invitee = member(2L, "invitee@example.com", "invitee");
+        invitee.updateProfile(null, null, "  QA  ", null, null);
         Invitation invitation = invitation(
                 100L,
                 project,
@@ -428,6 +429,7 @@ class InvitationServiceTest {
         assertThat(savedProjectMember.getMember()).isSameAs(invitee);
         assertThat(savedProjectMember.getProject()).isSameAs(project);
         assertThat(savedProjectMember.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(savedProjectMember.getWorkRole()).isEqualTo("QA");
         assertThat(savedProjectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
         assertThat(savedProjectMember.getJoinedAt()).isNotNull();
         assertThat(response.getInvitationId()).isEqualTo(100L);
@@ -454,7 +456,9 @@ class InvitationServiceTest {
                 ProjectMemberRole.OWNER,
                 previousJoinedAt
         );
+        leftProjectMember.changeWorkRole("기획");
         leftProjectMember.leave();
+        invitee.updateProfile(null, null, "개발", null, null);
         given(invitationRepository.findByIdForUpdate(100L))
                 .willReturn(Optional.of(invitation));
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
@@ -464,6 +468,7 @@ class InvitationServiceTest {
 
         assertThat(leftProjectMember.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
         assertThat(leftProjectMember.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
+        assertThat(leftProjectMember.getWorkRole()).isEqualTo("기획");
         assertThat(leftProjectMember.getJoinedAt()).isAfter(previousJoinedAt);
         assertThat(response.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
         verify(projectMemberRepository, never()).save(any(ProjectMember.class));
