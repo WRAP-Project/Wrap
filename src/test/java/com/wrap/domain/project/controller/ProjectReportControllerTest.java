@@ -1,7 +1,9 @@
 package com.wrap.domain.project.controller;
 
 import com.wrap.domain.member.entity.Member;
+import com.wrap.domain.project.dto.response.ProjectReportAreaResponse;
 import com.wrap.domain.project.dto.response.ProjectReportResponse;
+import com.wrap.domain.project.enums.ProjectReportAreaType;
 import com.wrap.domain.project.service.ProjectReportService;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
@@ -34,7 +36,36 @@ class ProjectReportControllerTest {
     @Test
     void getReportReturnsProjectReport() throws Exception {
         when(projectReportService.getReport(1L, 10L))
-                .thenReturn(new ProjectReportResponse(67, 6, 3, 2, List.of(), List.of()));
+                .thenReturn(new ProjectReportResponse(
+                        67,
+                        6,
+                        3,
+                        2,
+                        List.of(
+                                new ProjectReportAreaResponse(
+                                        "개발",
+                                        ProjectReportAreaType.WORK_ROLE,
+                                        50,
+                                        false,
+                                        null
+                                ),
+                                new ProjectReportAreaResponse(
+                                        "UNASSIGNED",
+                                        ProjectReportAreaType.UNASSIGNED,
+                                        0,
+                                        false,
+                                        null
+                                ),
+                                new ProjectReportAreaResponse(
+                                        "UNSPECIFIED",
+                                        ProjectReportAreaType.UNSPECIFIED,
+                                        0,
+                                        false,
+                                        null
+                                )
+                        ),
+                        List.of()
+                ));
 
         mockMvc.perform(get("/projects/10/report")
                         .with(user(memberDetails(1L))))
@@ -42,6 +73,12 @@ class ProjectReportControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.percent").value(67))
                 .andExpect(jsonPath("$.data.doneCount").value(6))
+                .andExpect(jsonPath("$.data.areas[0].area").value("개발"))
+                .andExpect(jsonPath("$.data.areas[0].areaType").value("WORK_ROLE"))
+                .andExpect(jsonPath("$.data.areas[1].area").value("UNASSIGNED"))
+                .andExpect(jsonPath("$.data.areas[1].areaType").value("UNASSIGNED"))
+                .andExpect(jsonPath("$.data.areas[2].area").value("UNSPECIFIED"))
+                .andExpect(jsonPath("$.data.areas[2].areaType").value("UNSPECIFIED"))
                 .andExpect(jsonPath("$.message").value("Project report retrieved."));
 
         verify(projectReportService).getReport(1L, 10L);
