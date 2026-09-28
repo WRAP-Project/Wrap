@@ -4,9 +4,12 @@ import com.wrap.domain.milestone.dto.request.MilestoneCreateRequest;
 import com.wrap.domain.milestone.dto.request.MilestoneUpdateRequest;
 import com.wrap.domain.milestone.dto.response.MilestoneResponse;
 import com.wrap.domain.milestone.entity.Milestone;
+import com.wrap.domain.milestone.enums.MilestoneStatus;
 import com.wrap.domain.milestone.repository.MilestoneRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
+import com.wrap.domain.task.entity.Task;
+import com.wrap.domain.task.enums.TaskStatus;
 import com.wrap.domain.task.repository.TaskRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
@@ -24,12 +27,13 @@ public class MilestoneService {
     private final TaskRepository taskRepository;
     private final ProjectMemberValidator projectMemberValidator;
 
+    @Transactional
     public List<MilestoneResponse> findProjectMilestones(Long memberId, Long projectId) {
         projectMemberValidator.findJoinedMember(memberId, projectId);
 
         return milestoneRepository.findAllByProjectIdOrderByDueDateAscIdAsc(projectId)
                 .stream()
-                .map(MilestoneResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -63,7 +67,7 @@ public class MilestoneService {
                 request.dueDate() == null ? milestone.getDueDate() : request.dueDate()
         );
 
-        return MilestoneResponse.from(milestone);
+        return toResponse(milestone);
     }
 
     @Transactional
@@ -73,6 +77,30 @@ public class MilestoneService {
 
         taskRepository.clearMilestone(milestoneId);
         milestoneRepository.delete(milestone);
+    }
+
+    private MilestoneResponse toResponse(Milestone milestone) {
+        List<Task> tasks = taskRepository.findByMilestoneId(milestone.getId());
+        int totalTaskCount = tasks.size();
+        int doneTaskCount = (int) tasks.stream()
+                .filter(task -> task.getStatus() == TaskStatus.DONE)
+                .count();
+
+        promoteIfAllTasksDone(milestone, totalTaskCount, doneTaskCount);
+
+        return MilestoneResponse.of(milestone, totalTaskCount, doneTaskCount);
+    }
+
+    /**
+     * 연결된 할 일이 모두 완료되면 마일스톤을 완료로 승격시킨다.
+     * 승격만 수행하고, 사용자가 완료로 표시한 마일스톤을 다시 진행중으로 되돌리지는 않는다.
+     */
+    private void promoteIfAllTasksDone(Milestone milestone, int totalTaskCount, int doneTaskCount) {
+        if (milestone.getStatus() == MilestoneStatus.IN_PROGRESS
+                && totalTaskCount > 0
+                && doneTaskCount == totalTaskCount) {
+            milestone.updateStatus(MilestoneStatus.DONE);
+        }
     }
 
     private Milestone findProjectMilestone(Long projectId, Long milestoneId) {
