@@ -3,6 +3,7 @@ package com.wrap.domain.project.service;
 import com.wrap.domain.project.dto.response.ProjectReportAreaResponse;
 import com.wrap.domain.project.dto.response.ProjectReportResponse;
 import com.wrap.domain.project.dto.response.ProjectReportRiskResponse;
+import com.wrap.domain.project.enums.ProjectReportAreaType;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
 import com.wrap.domain.task.entity.Task;
@@ -12,7 +13,6 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,11 +52,16 @@ public class ProjectReportService {
     }
 
     private List<ProjectReportAreaResponse> buildAreas(List<Task> tasks) {
-        Map<String, List<Task>> byArea = tasks.stream()
-                .collect(Collectors.groupingBy(areaOf(), java.util.LinkedHashMap::new, Collectors.toList()));
+        Map<AreaKey, List<Task>> byArea = tasks.stream()
+                .collect(Collectors.groupingBy(
+                        this::areaOf,
+                        java.util.LinkedHashMap::new,
+                        Collectors.toList()
+                ));
 
         return byArea.entrySet().stream()
                 .map(entry -> {
+                    AreaKey areaKey = entry.getKey();
                     List<Task> areaTasks = entry.getValue();
                     long done = areaTasks.stream()
                             .filter(task -> task.getStatus() == TaskStatus.DONE)
@@ -66,13 +71,16 @@ public class ProjectReportService {
                             ? 0
                             : (int) Math.round(done * 100.0 / areaTasks.size());
                     return new ProjectReportAreaResponse(
-                            entry.getKey(),
+                            areaKey.area(),
+                            areaKey.type(),
                             percent,
                             delayed,
                             delayed ? "확인 필요" : null
                     );
                 })
-                .sorted(Comparator.comparing(ProjectReportAreaResponse::area))
+                .sorted(Comparator
+                        .comparing(ProjectReportAreaResponse::area)
+                        .thenComparing(ProjectReportAreaResponse::areaType))
                 .toList();
     }
 
@@ -93,11 +101,24 @@ public class ProjectReportService {
                 .toList();
     }
 
-    private Function<Task, String> areaOf() {
-        return task -> {
-            ProjectMember assignee = task.getAssignee();
-            return assignee == null ? "UNASSIGNED" : assignee.getRole().name();
-        };
+    private AreaKey areaOf(Task task) {
+        ProjectMember assignee = task.getAssignee();
+        if (assignee == null) {
+            return new AreaKey(
+                    ProjectReportAreaType.UNASSIGNED,
+                    ProjectReportAreaType.UNASSIGNED.name()
+            );
+        }
+
+        String workRole = assignee.getWorkRole();
+        if (workRole == null) {
+            return new AreaKey(
+                    ProjectReportAreaType.UNSPECIFIED,
+                    ProjectReportAreaType.UNSPECIFIED.name()
+            );
+        }
+
+        return new AreaKey(ProjectReportAreaType.WORK_ROLE, workRole);
     }
 
     private boolean needsCheck(Task task) {
@@ -118,5 +139,8 @@ public class ProjectReportService {
             return "마감일이 지난 할 일입니다.";
         }
         return "마감이 가까운 할 일입니다.";
+    }
+
+    private record AreaKey(ProjectReportAreaType type, String area) {
     }
 }
