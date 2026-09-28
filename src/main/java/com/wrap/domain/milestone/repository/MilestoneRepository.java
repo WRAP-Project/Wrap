@@ -13,4 +13,6 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
     List<Milestone> findByProjectIdAndDueDate(Long projectId, LocalDate dueDate);
 
     Optional<Milestone> findByIdAndProjectId(Long id, Long projectId);
+
+    List<Milestone> findAllByProjectIdOrderByDueDateAscIdAsc(Long projectId);
 }

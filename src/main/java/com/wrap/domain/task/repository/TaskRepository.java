@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -50,6 +51,10 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     );
 
     List<Task> findByMilestoneId(Long milestoneId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Task t set t.milestone = null where t.milestone.id = :milestoneId")
+    void clearMilestone(@Param("milestoneId") Long milestoneId);
 
     List<Task> findByAssigneeId(Long assigneeId);
 
