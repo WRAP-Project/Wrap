@@ -39,6 +39,12 @@ class TestApiSwaggerTest {
                 .andExpect(jsonPath("$.paths['/schedules/{scheduleId}/uncheck']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/schedules/reminders']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/calendar/risk-checks']").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/milestones'].get").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/milestones'].post").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/milestones/{milestoneId}'].patch").exists())
+                .andExpect(jsonPath("$.paths['/projects/{projectId}/milestones/{milestoneId}'].delete").exists())
+                .andExpect(jsonPath("$.components.schemas.MilestoneCreateRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.MilestoneResponse").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests']").exists())
                 .andExpect(jsonPath("$.paths['/projects/{projectId}/availability-requests/{availabilityRequestId}']").exists())
                 .andExpect(jsonPath(

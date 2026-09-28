@@ -56,6 +56,26 @@ public class Milestone {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public static Milestone create(
+            Project project,
+            String title,
+            String description,
+            LocalDate dueDate
+    ) {
+        Milestone milestone = new Milestone();
+        milestone.project = project;
+        milestone.title = title;
+        milestone.description = description;
+        milestone.dueDate = dueDate;
+        return milestone;
+    }
+
+    public void update(String title, String description, LocalDate dueDate) {
+        this.title = title;
+        this.description = description;
+        this.dueDate = dueDate;
+    }
+
     public void updateStatus(MilestoneStatus status) {
         if (status == null) {
             throw new IllegalArgumentException("마일스톤 상태는 필수입니다.");
