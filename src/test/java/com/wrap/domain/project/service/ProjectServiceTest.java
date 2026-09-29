@@ -22,6 +22,9 @@ import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.task.enums.TaskStatus;
+import com.wrap.domain.task.repository.TaskRepository;
+import com.wrap.domain.task.repository.projection.ProjectTaskProgressProjection;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
@@ -51,6 +54,9 @@ class ProjectServiceTest {
 
     @Mock
     private ProjectMemberRepository projectMemberRepository;
+
+    @Mock
+    private TaskRepository taskRepository;
 
     @InjectMocks
     private ProjectService projectService;
@@ -169,7 +175,76 @@ class ProjectServiceTest {
                         1L,
                         ProjectMemberStatus.JOINED
                 );
+        verify(taskRepository).findProjectProgressCounts(
+                List.of(10L, 20L),
+                TaskStatus.DONE
+        );
+        verify(projectMemberRepository).findAllByProjectIdsAndStatusWithMember(
+                List.of(10L, 20L),
+                ProjectMemberStatus.JOINED
+        );
         verifyNoInteractions(memberRepository, projectRepository);
+    }
+
+    @Test
+    @DisplayName("내 프로젝트 목록 조회 성공 - 진행률과 참여자 프로필을 프로젝트별로 반환한다")
+    void getMyProjects_returnsCardSummaries() {
+        Project firstProject = project(10L, "First");
+        Project secondProject = project(20L, "Second");
+        Member requester = member(1L, "나", null);
+        List<ProjectMember> memberships = List.of(
+                projectMember(100L, requester, firstProject, LocalDateTime.of(2026, 7, 1, 9, 0)),
+                projectMember(200L, requester, secondProject, LocalDateTime.of(2026, 7, 1, 9, 0))
+        );
+        List<ProjectMember> cardMembers = List.of(
+                memberships.get(0),
+                projectMember(101L, member(2L, "둘", "https://example.com/2.png"),
+                        firstProject, LocalDateTime.of(2026, 7, 2, 9, 0)),
+                projectMember(102L, member(3L, "셋", null),
+                        firstProject, LocalDateTime.of(2026, 7, 3, 9, 0)),
+                projectMember(103L, member(4L, "넷", null),
+                        firstProject, LocalDateTime.of(2026, 7, 4, 9, 0)),
+                projectMember(104L, member(5L, "다섯", null),
+                        firstProject, LocalDateTime.of(2026, 7, 5, 9, 0)),
+                projectMember(105L, member(6L, "여섯", null),
+                        firstProject, LocalDateTime.of(2026, 7, 6, 9, 0)),
+                projectMember(106L, member(7L, "일곱", null),
+                        firstProject, LocalDateTime.of(2026, 7, 7, 9, 0)),
+                memberships.get(1)
+        );
+        ProjectTaskProgressProjection firstProjectProgress =
+                progressCounts(10L, 3, 2);
+        given(projectMemberRepository.findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
+                1L, ProjectMemberStatus.JOINED
+        )).willReturn(memberships);
+        given(taskRepository.findProjectProgressCounts(
+                List.of(10L, 20L), TaskStatus.DONE
+        )).willReturn(List.of(firstProjectProgress));
+        given(projectMemberRepository.findAllByProjectIdsAndStatusWithMember(
+                List.of(10L, 20L), ProjectMemberStatus.JOINED
+        )).willReturn(cardMembers);
+
+        List<ProjectSummaryResponse> responses = projectService.getMyProjects(1L, null);
+
+        assertThat(responses).hasSize(2);
+        ProjectSummaryResponse first = responses.get(0);
+        assertThat(first.getProgress()).isEqualTo(67);
+        assertThat(first.getMemberCount()).isEqualTo(7);
+        assertThat(first.getMemberProfiles()).hasSize(6);
+        assertThat(first.getMemberProfiles())
+                .extracting(profile -> profile.nickname())
+                .containsExactly("나", "둘", "셋", "넷", "다섯", "여섯");
+        assertThat(first.getMemberProfiles().get(0).memberId()).isEqualTo(1L);
+        assertThat(first.getMemberProfiles().get(0).profileImage()).isNull();
+        assertThat(first.getMemberProfiles().get(1).profileImage())
+                .isEqualTo("https://example.com/2.png");
+
+        ProjectSummaryResponse second = responses.get(1);
+        assertThat(second.getProgress()).isZero();
+        assertThat(second.getMemberCount()).isEqualTo(1);
+        assertThat(second.getMemberProfiles())
+                .extracting(profile -> profile.nickname())
+                .containsExactly("나");
     }
 
     @Test
@@ -190,6 +265,9 @@ class ProjectServiceTest {
                         1L,
                         ProjectMemberStatus.JOINED
                 );
+        verifyNoInteractions(taskRepository);
+        verify(projectMemberRepository, never())
+                .findAllByProjectIdsAndStatusWithMember(any(), any());
         verifyNoInteractions(memberRepository, projectRepository);
     }
 
@@ -893,5 +971,44 @@ class ProjectServiceTest {
         );
         ReflectionTestUtils.setField(project, "id", id);
         return project;
+    }
+
+    private Member member(Long id, String nickname, String profileImage) {
+        Member member = Member.builder()
+                .email("member" + id + "@wrap.com")
+                .password("password")
+                .nickname(nickname)
+                .build();
+        ReflectionTestUtils.setField(member, "id", id);
+        ReflectionTestUtils.setField(member, "profileImage", profileImage);
+        return member;
+    }
+
+    private ProjectMember projectMember(
+            Long id,
+            Member member,
+            Project project,
+            LocalDateTime joinedAt
+    ) {
+        ProjectMember projectMember = ProjectMember.join(
+                member,
+                project,
+                ProjectMemberRole.MEMBER,
+                joinedAt
+        );
+        ReflectionTestUtils.setField(projectMember, "id", id);
+        return projectMember;
+    }
+
+    private ProjectTaskProgressProjection progressCounts(
+            Long projectId,
+            long totalCount,
+            long doneCount
+    ) {
+        ProjectTaskProgressProjection projection = mock(ProjectTaskProgressProjection.class);
+        given(projection.getProjectId()).willReturn(projectId);
+        given(projection.getTotalCount()).willReturn(totalCount);
+        given(projection.getDoneCount()).willReturn(doneCount);
+        return projection;
     }
 }

@@ -2,6 +2,7 @@ package com.wrap.domain.task.repository;
 
 import com.wrap.domain.task.entity.Task;
 import com.wrap.domain.task.enums.TaskStatus;
+import com.wrap.domain.task.repository.projection.ProjectTaskProgressProjection;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
+
+    @Query("""
+            select t.project.id as projectId,
+                   count(t.id) as totalCount,
+                   sum(case when t.status = :doneStatus then 1 else 0 end) as doneCount
+            from Task t
+            where t.project.id in :projectIds
+            group by t.project.id
+            """)
+    List<ProjectTaskProgressProjection> findProjectProgressCounts(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("doneStatus") TaskStatus doneStatus
+    );
 
     List<Task> findByProjectId(Long projectId);
 

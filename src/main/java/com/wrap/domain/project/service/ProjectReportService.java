@@ -39,7 +39,7 @@ public class ProjectReportService {
                 .filter(this::needsCheck)
                 .count();
         long inProgressCount = Math.max(0, total - doneCount - needsCheckCount);
-        int percent = total == 0 ? 0 : (int) Math.round(doneCount * 100.0 / total);
+        int percent = ProjectProgressCalculator.calculate(doneCount, total);
 
         return new ProjectReportResponse(
                 percent,
@@ -67,9 +67,7 @@ public class ProjectReportService {
                             .filter(task -> task.getStatus() == TaskStatus.DONE)
                             .count();
                     boolean delayed = areaTasks.stream().anyMatch(this::needsCheck);
-                    int percent = areaTasks.isEmpty()
-                            ? 0
-                            : (int) Math.round(done * 100.0 / areaTasks.size());
+                    int percent = ProjectProgressCalculator.calculate(done, areaTasks.size());
                     return new ProjectReportAreaResponse(
                             areaKey.area(),
                             areaKey.type(),

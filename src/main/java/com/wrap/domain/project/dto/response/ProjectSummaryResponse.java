@@ -3,6 +3,7 @@ package com.wrap.domain.project.dto.response;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.enums.ProjectStatus;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -22,6 +23,11 @@ public class ProjectSummaryResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private String color;
+    private int progress;
+    private int memberCount;
+
+    @Builder.Default
+    private List<ProjectSummaryMemberResponse> memberProfiles = List.of();
 
     public static ProjectSummaryResponse from(Project project) {
         return ProjectSummaryResponse.builder()
@@ -31,6 +37,28 @@ public class ProjectSummaryResponse {
                 .startDate(project.getStartDate())
                 .endDate(project.getEndDate())
                 .color(project.getColor())
+                .progress(0)
+                .memberCount(0)
+                .memberProfiles(List.of())
+                .build();
+    }
+
+    public static ProjectSummaryResponse from(
+            Project project,
+            int progress,
+            int memberCount,
+            List<ProjectSummaryMemberResponse> memberProfiles
+    ) {
+        return ProjectSummaryResponse.builder()
+                .id(project.getId())
+                .name(project.getName())
+                .status(project.getStatus())
+                .startDate(project.getStartDate())
+                .endDate(project.getEndDate())
+                .color(project.getColor())
+                .progress(progress)
+                .memberCount(memberCount)
+                .memberProfiles(List.copyOf(memberProfiles))
                 .build();
     }
 }

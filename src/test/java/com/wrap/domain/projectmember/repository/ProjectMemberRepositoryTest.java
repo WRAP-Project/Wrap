@@ -19,6 +19,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @DataJpaTest
 class ProjectMemberRepositoryTest {
@@ -71,6 +72,87 @@ class ProjectMemberRepositoryTest {
                 : new Long[]{status == ProjectStatus.IN_PROGRESS ? inProgress.getId() : completed.getId()};
         assertThat(results).extracting(membership -> membership.getProject().getId())
                 .containsExactlyInAnyOrder(expectedIds);
+        assertThat(results).allSatisfy(membership -> assertThat(
+                entityManager.getEntityManagerFactory()
+                        .getPersistenceUnitUtil()
+                        .isLoaded(membership.getProject())
+        ).isTrue());
+    }
+
+    @Test
+    void findsJoinedMemberProfilesForMultipleProjectsInStableOrder() {
+        Project firstProject = project("First", ProjectStatus.IN_PROGRESS);
+        Project secondProject = project("Second", ProjectStatus.IN_PROGRESS);
+        LocalDateTime early = LocalDateTime.of(2026, 7, 1, 9, 0);
+        LocalDateTime sameTime = LocalDateTime.of(2026, 7, 2, 9, 0);
+
+        ProjectMember first = join(
+                member("first@example.com", "첫째", null),
+                firstProject,
+                ProjectMemberRole.OWNER,
+                early
+        );
+        ProjectMember second = join(
+                member("second@example.com", "둘째", "https://example.com/second.png"),
+                firstProject,
+                ProjectMemberRole.MEMBER,
+                sameTime
+        );
+        ProjectMember third = join(
+                member("third@example.com", "셋째", null),
+                firstProject,
+                ProjectMemberRole.MEMBER,
+                sameTime
+        );
+        ProjectMember left = join(
+                member("left@example.com", "탈퇴", null),
+                firstProject,
+                ProjectMemberRole.MEMBER,
+                early.minusDays(1)
+        );
+        left.leave();
+        ProjectMember invited = join(
+                member("invited@example.com", "초대", null),
+                firstProject,
+                ProjectMemberRole.MEMBER,
+                early.minusDays(1)
+        );
+        ReflectionTestUtils.setField(invited, "status", ProjectMemberStatus.INVITED);
+        ProjectMember otherProjectMember = join(
+                member("other@example.com", "다른 프로젝트", null),
+                secondProject,
+                ProjectMemberRole.OWNER,
+                early
+        );
+
+        entityManager.flush();
+        entityManager.clear();
+
+        List<ProjectMember> results =
+                projectMemberRepository.findAllByProjectIdsAndStatusWithMember(
+                        List.of(firstProject.getId(), secondProject.getId()),
+                        ProjectMemberStatus.JOINED
+                );
+
+        assertThat(results).extracting(ProjectMember::getId)
+                .containsExactly(
+                        first.getId(),
+                        second.getId(),
+                        third.getId(),
+                        otherProjectMember.getId()
+                );
+        assertThat(results).extracting(ProjectMember::getStatus)
+                .containsOnly(ProjectMemberStatus.JOINED);
+        assertThat(results).extracting(membership -> membership.getMember().getNickname())
+                .containsExactly("첫째", "둘째", "셋째", "다른 프로젝트");
+        assertThat(results.get(1).getMember().getProfileImage())
+                .isEqualTo("https://example.com/second.png");
+        assertThat(results.get(0).getMember().getProfileImage()).isNull();
+        assertThat(results).allSatisfy(membership -> assertThat(
+                entityManager.getEntityManagerFactory()
+                        .getPersistenceUnitUtil()
+                        .isLoaded(membership.getMember())
+        ).isTrue());
     }
 
     @Test
@@ -101,8 +183,17 @@ class ProjectMemberRepositoryTest {
     }
 
     private Member member(String email) {
-        return memberRepository.save(Member.builder()
-                .email(email).password("encoded-password").nickname("member").build());
+        return member(email, "member", null);
+    }
+
+    private Member member(String email, String nickname, String profileImage) {
+        Member member = Member.builder()
+                .email(email)
+                .password("encoded-password")
+                .nickname(nickname)
+                .build();
+        ReflectionTestUtils.setField(member, "profileImage", profileImage);
+        return memberRepository.save(member);
     }
 
     private Project project(String name, ProjectStatus status) {
@@ -114,7 +205,16 @@ class ProjectMemberRepositoryTest {
     }
 
     private ProjectMember join(Member member, Project project, ProjectMemberRole role) {
+        return join(member, project, role, LocalDateTime.of(2026, 7, 1, 9, 0));
+    }
+
+    private ProjectMember join(
+            Member member,
+            Project project,
+            ProjectMemberRole role,
+            LocalDateTime joinedAt
+    ) {
         return projectMemberRepository.save(ProjectMember.join(
-                member, project, role, LocalDateTime.of(2026, 7, 1, 9, 0)));
+                member, project, role, joinedAt));
     }
 }
