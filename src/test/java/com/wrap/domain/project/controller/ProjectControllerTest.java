@@ -19,6 +19,7 @@ import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
+import com.wrap.domain.project.dto.response.ProjectSummaryMemberResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.enums.ProjectStatus;
 import com.wrap.domain.project.service.ProjectService;
@@ -173,6 +174,16 @@ class ProjectControllerTest {
                         .startDate(LocalDate.of(2026, 7, 1))
                         .endDate(LocalDate.of(2026, 8, 31))
                         .color("#CDEA6F")
+                        .progress(67)
+                        .memberCount(4)
+                        .memberProfiles(List.of(
+                                new ProjectSummaryMemberResponse(
+                                        1L,
+                                        "김랩",
+                                        "https://example.com/1.png"
+                                ),
+                                new ProjectSummaryMemberResponse(2L, "이랩", null)
+                        ))
                         .build(),
                 ProjectSummaryResponse.builder()
                         .id(20L)
@@ -181,6 +192,11 @@ class ProjectControllerTest {
                         .startDate(LocalDate.of(2026, 3, 1))
                         .endDate(LocalDate.of(2026, 6, 30))
                         .color("#F5E03A")
+                        .progress(100)
+                        .memberCount(1)
+                        .memberProfiles(List.of(
+                                new ProjectSummaryMemberResponse(3L, "박랩", null)
+                        ))
                         .build()
         );
         when(projectService.getMyProjects(1L, null)).thenReturn(responses);
@@ -194,10 +210,23 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("Wrap"))
                 .andExpect(jsonPath("$.data[0].color").value("#CDEA6F"))
                 .andExpect(jsonPath("$.data[0].status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data[0].progress").value(67))
+                .andExpect(jsonPath("$.data[0].memberCount").value(4))
+                .andExpect(jsonPath("$.data[0].memberProfiles.length()").value(2))
+                .andExpect(jsonPath("$.data[0].memberProfiles[0].memberId").value(1))
+                .andExpect(jsonPath("$.data[0].memberProfiles[0].nickname").value("김랩"))
+                .andExpect(jsonPath("$.data[0].memberProfiles[0].profileImage")
+                        .value("https://example.com/1.png"))
+                .andExpect(jsonPath("$.data[0].memberProfiles[1].memberId").value(2))
+                .andExpect(jsonPath("$.data[0].memberProfiles[1].nickname").value("이랩"))
+                .andExpect(jsonPath("$.data[0].memberProfiles[1].profileImage").value((Object) null))
                 .andExpect(jsonPath("$.data[1].id").value(20))
                 .andExpect(jsonPath("$.data[1].name").value("Graduation"))
                 .andExpect(jsonPath("$.data[1].color").value("#F5E03A"))
                 .andExpect(jsonPath("$.data[1].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data[1].progress").value(100))
+                .andExpect(jsonPath("$.data[1].memberCount").value(1))
+                .andExpect(jsonPath("$.data[1].memberProfiles.length()").value(1))
                 .andExpect(jsonPath("$.message").value("My projects retrieved."));
 
         verify(projectService).getMyProjects(1L, null);

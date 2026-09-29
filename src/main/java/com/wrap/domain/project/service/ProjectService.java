@@ -5,6 +5,7 @@ import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.dto.request.ProjectCreateRequest;
 import com.wrap.domain.project.dto.request.ProjectUpdateRequest;
 import com.wrap.domain.project.dto.response.ProjectResponse;
+import com.wrap.domain.project.dto.response.ProjectSummaryMemberResponse;
 import com.wrap.domain.project.dto.response.ProjectSummaryResponse;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.project.enums.ProjectStatus;
@@ -12,11 +13,17 @@ import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.task.enums.TaskStatus;
+import com.wrap.domain.task.repository.TaskRepository;
+import com.wrap.domain.task.repository.projection.ProjectTaskProgressProjection;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,9 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ProjectService {
 
+    private static final int MAX_MEMBER_PROFILES = 6;
+
     private final MemberRepository memberRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final TaskRepository taskRepository;
 
     @Transactional
     public ProjectResponse create(Long memberId, ProjectCreateRequest request) {
@@ -65,9 +75,40 @@ public class ProjectService {
                 : projectMemberRepository.findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
                         memberId, ProjectMemberStatus.JOINED, status);
 
-        return memberships.stream()
+        if (memberships.isEmpty()) {
+            return List.of();
+        }
+
+        List<Project> projects = memberships.stream()
                 .map(ProjectMember::getProject)
-                .map(ProjectSummaryResponse::from)
+                .toList();
+        List<Long> projectIds = projects.stream()
+                .map(Project::getId)
+                .toList();
+
+        Map<Long, ProjectTaskProgressProjection> progressByProjectId =
+                taskRepository.findProjectProgressCounts(projectIds, TaskStatus.DONE)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ProjectTaskProgressProjection::getProjectId,
+                                Function.identity()
+                        ));
+        Map<Long, List<ProjectMember>> membersByProjectId =
+                projectMemberRepository.findAllByProjectIdsAndStatusWithMember(
+                                projectIds,
+                                ProjectMemberStatus.JOINED
+                        )
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                projectMember -> projectMember.getProject().getId()
+                        ));
+
+        return projects.stream()
+                .map(project -> summaryOf(
+                        project,
+                        progressByProjectId.get(project.getId()),
+                        membersByProjectId.getOrDefault(project.getId(), List.of())
+                ))
                 .toList();
     }
 
@@ -172,5 +213,29 @@ public class ProjectService {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new CustomException(ErrorCode.INVALID_DATE_RANGE);
         }
+    }
+
+    private ProjectSummaryResponse summaryOf(
+            Project project,
+            ProjectTaskProgressProjection progressCounts,
+            List<ProjectMember> members
+    ) {
+        int progress = progressCounts == null
+                ? 0
+                : ProjectProgressCalculator.calculate(
+                        progressCounts.getDoneCount(),
+                        progressCounts.getTotalCount()
+                );
+        List<ProjectSummaryMemberResponse> memberProfiles = members.stream()
+                .limit(MAX_MEMBER_PROFILES)
+                .map(ProjectSummaryMemberResponse::from)
+                .toList();
+
+        return ProjectSummaryResponse.from(
+                project,
+                progress,
+                members.size(),
+                memberProfiles
+        );
     }
 }

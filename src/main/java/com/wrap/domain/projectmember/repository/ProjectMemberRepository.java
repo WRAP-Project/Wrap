@@ -6,7 +6,10 @@ import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Long> {
 
@@ -15,15 +18,31 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             ProjectMemberStatus status
     );
 
+    @EntityGraph(attributePaths = "project")
     List<ProjectMember> findAllByMemberIdAndStatusAndProjectDeletedAtIsNull(
             Long memberId,
             ProjectMemberStatus status
     );
 
+    @EntityGraph(attributePaths = "project")
     List<ProjectMember> findAllByMemberIdAndStatusAndProjectStatusAndProjectDeletedAtIsNull(
             Long memberId,
             ProjectMemberStatus status,
             ProjectStatus projectStatus
+    );
+
+    @Query("""
+            select projectMember
+            from ProjectMember projectMember
+            join fetch projectMember.project project
+            join fetch projectMember.member member
+            where project.id in :projectIds
+              and projectMember.status = :status
+            order by project.id asc, projectMember.joinedAt asc, projectMember.id asc
+            """)
+    List<ProjectMember> findAllByProjectIdsAndStatusWithMember(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("status") ProjectMemberStatus status
     );
 
     Optional<ProjectMember> findByIdAndProjectId(

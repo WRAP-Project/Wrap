@@ -56,6 +56,10 @@ public class ProjectController {
                     status를 생략하면 진행 중·완료 프로젝트를 모두 반환합니다.
                     IN_PROGRESS는 진행 중, COMPLETED는 완료된 프로젝트만 반환합니다.
                     상태 값은 대문자로 입력하며 지원하지 않는 값은 400 / INVALID_REQUEST를 반환합니다.
+                    progress는 DONE 업무 수를 전체 업무 수로 나눈 뒤 반올림한 0~100 정수입니다.
+                    memberCount는 JOINED 상태인 전체 참여자 수이며 현재 요청자도 포함합니다.
+                    memberProfiles는 JOINED 참여자를 참여 시각과 프로젝트 멤버 ID 순으로 최대 6명 반환합니다.
+                    프로필 이미지가 없는 참여자의 profileImage는 null입니다.
                     조회 결과가 없으면 빈 목록을 반환합니다.
                     """
     )
