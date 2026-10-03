@@ -37,7 +37,8 @@ public class ProjectInviteLinkController {
             summary = "프로젝트 초대 링크 생성",
             description = """
                     프로젝트 OWNER가 공유 가능한 초대 링크를 생성합니다.
-                    프로젝트당 하나의 활성 링크만 존재할 수 있으며,
+                    프로젝트당 하나의 만료되지 않은 활성 링크만 존재할 수 있으며,
+                    링크는 생성 시각부터 7일간 유효합니다.
                     원본 초대 URL은 생성 성공 응답에서만 반환됩니다.
                     """
     )
@@ -82,6 +83,7 @@ public class ProjectInviteLinkController {
             summary = "프로젝트 초대 링크 목록 조회",
             description = """
                     프로젝트에서 생성된 초대 링크 이력을 최신순으로 조회합니다.
+                    만료된 링크도 이력에 포함되며 expiresAt으로 만료 여부를 확인합니다.
                     보안을 위해 원본 토큰과 전체 초대 URL은 반환하지 않습니다.
                     """
     )
@@ -177,6 +179,9 @@ public class ProjectInviteLinkController {
                     description = "링크가 없거나 비활성화되었거나 프로젝트가 삭제됨"
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "410", description = "초대 링크가 만료됨"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "409", description = "프로젝트가 완료됨"
             )
     })
@@ -213,6 +218,9 @@ public class ProjectInviteLinkController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "404",
                     description = "링크 또는 활성 회원을 찾을 수 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "410", description = "초대 링크가 만료됨"
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "409",

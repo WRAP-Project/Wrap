@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -24,9 +25,13 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +45,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class InvitationServiceTest {
 
+    private static final LocalDateTime CURRENT_TIME =
+            LocalDateTime.of(2026, 8, 23, 10, 0);
+    private static final ZoneId TEST_ZONE = ZoneId.of("Asia/Seoul");
+
     @Mock
     private ProjectRepository projectRepository;
 
@@ -52,8 +61,18 @@ class InvitationServiceTest {
     @Mock
     private InvitationRepository invitationRepository;
 
+    @Mock
+    private Clock clock;
+
     @InjectMocks
     private InvitationService invitationService;
+
+    @BeforeEach
+    void setUpClock() {
+        Instant currentInstant = CURRENT_TIME.atZone(TEST_ZONE).toInstant();
+        lenient().when(clock.instant()).thenReturn(currentInstant);
+        lenient().when(clock.getZone()).thenReturn(TEST_ZONE);
+    }
 
     @Test
     void getReceivedInvitations_success() {
@@ -88,6 +107,8 @@ class InvitationServiceTest {
         assertThat(responses.get(0).getInviterNickname()).isEqualTo("owner");
         assertThat(responses.get(0).getRole()).isEqualTo(ProjectMemberRole.MEMBER);
         assertThat(responses.get(0).getStatus()).isEqualTo(InvitationStatus.INVITED);
+        assertThat(responses.get(0).getExpiresAt())
+                .isEqualTo(LocalDateTime.of(2026, 8, 25, 10, 0));
         verify(invitationRepository).findAllByInviteeIdOrderByCreatedAtDesc(2L);
     }
 
@@ -101,6 +122,50 @@ class InvitationServiceTest {
 
         assertThat(responses).isEmpty();
         verify(invitationRepository).findAllByInviteeIdOrderByCreatedAtDesc(2L);
+    }
+
+    @Test
+    void getReceivedInvitations_returnsOnlyValidPendingInvitations() {
+        Project project = project(10L);
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        Invitation validInvitation = invitation(
+                300L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        Invitation expiredInvitation = invitation(
+                200L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        Invitation acceptedInvitation = invitation(
+                100L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 22, 9, 0)
+        );
+        acceptedInvitation.accept();
+        given(invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(2L))
+                .willReturn(List.of(
+                        validInvitation,
+                        expiredInvitation,
+                        acceptedInvitation
+                ));
+
+        List<ReceivedInvitationResponse> responses =
+                invitationService.getReceivedInvitations(2L);
+
+        assertThat(responses)
+                .extracting(ReceivedInvitationResponse::getInvitationId)
+                .containsExactly(300L);
+        assertThat(expiredInvitation.getStatus()).isEqualTo(InvitationStatus.EXPIRED);
+        assertThat(acceptedInvitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
     }
 
     @Test
@@ -138,6 +203,8 @@ class InvitationServiceTest {
         assertThat(responses.get(0).getInviteeMemberId()).isEqualTo(2L);
         assertThat(responses.get(0).getInviteeEmail()).isEqualTo("new@example.com");
         assertThat(responses.get(0).getStatus()).isEqualTo(InvitationStatus.INVITED);
+        assertThat(responses.get(0).getExpiresAt())
+                .isEqualTo(LocalDateTime.of(2026, 8, 25, 10, 0));
         verify(invitationRepository).findAllByProjectIdOrderByCreatedAtDesc(10L);
     }
 
@@ -155,6 +222,31 @@ class InvitationServiceTest {
 
         assertThat(responses).isEmpty();
         verify(invitationRepository).findAllByProjectIdOrderByCreatedAtDesc(10L);
+    }
+
+    @Test
+    void getSentInvitations_includesExpiredInvitationWithExpiredStatus() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation expiredInvitation = invitation(
+                100L,
+                project,
+                ownerMember,
+                invitee,
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(10L))
+                .willReturn(List.of(expiredInvitation));
+
+        List<InvitationResponse> responses =
+                invitationService.getSentInvitations(1L, 10L);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getStatus()).isEqualTo(InvitationStatus.EXPIRED);
+        assertThat(expiredInvitation.getStatus()).isEqualTo(InvitationStatus.EXPIRED);
     }
 
     @Test
@@ -226,19 +318,14 @@ class InvitationServiceTest {
                 10L,
                 ProjectMemberStatus.JOINED
         )).willReturn(false);
-        given(invitationRepository.existsByProjectIdAndInviteeIdAndStatus(
+        given(invitationRepository.findAllByProjectIdAndInviteeIdAndStatus(
                 10L,
                 2L,
                 InvitationStatus.INVITED
-        )).willReturn(false);
+        )).willReturn(List.of());
         given(invitationRepository.save(any(Invitation.class))).willAnswer(invocation -> {
             Invitation invitation = invocation.getArgument(0);
             ReflectionTestUtils.setField(invitation, "id", 100L);
-            ReflectionTestUtils.setField(
-                    invitation,
-                    "createdAt",
-                    LocalDateTime.of(2026, 8, 16, 10, 0)
-            );
             return invitation;
         });
 
@@ -250,6 +337,7 @@ class InvitationServiceTest {
         assertThat(response.getInviteeEmail()).isEqualTo("invitee@example.com");
         assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
         assertThat(response.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        assertThat(response.getExpiresAt()).isEqualTo(CURRENT_TIME.plusDays(7));
         verify(memberRepository).findByEmail("invitee@example.com");
         verify(invitationRepository).save(any(Invitation.class));
     }
@@ -388,11 +476,18 @@ class InvitationServiceTest {
                 10L,
                 ProjectMemberStatus.JOINED
         )).willReturn(false);
-        given(invitationRepository.existsByProjectIdAndInviteeIdAndStatus(
+        Invitation activeInvitation = invitation(
+                99L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 22, 10, 0)
+        );
+        given(invitationRepository.findAllByProjectIdAndInviteeIdAndStatus(
                 10L,
                 2L,
                 InvitationStatus.INVITED
-        )).willReturn(true);
+        )).willReturn(List.of(activeInvitation));
 
         assertError(
                 () -> invitationService.create(1L, 10L, request()),
@@ -400,6 +495,45 @@ class InvitationServiceTest {
         );
 
         verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    void create_expiredInvitationExists_allowsNewInvitation() {
+        Project project = project(10L);
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
+        Invitation expiredInvitation = invitation(
+                99L,
+                project,
+                inviter,
+                invitee,
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        givenProjectAndRequester(project, owner);
+        given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
+        given(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
+                2L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(false);
+        given(invitationRepository.findAllByProjectIdAndInviteeIdAndStatus(
+                10L,
+                2L,
+                InvitationStatus.INVITED
+        )).willReturn(List.of(expiredInvitation));
+        given(invitationRepository.save(any(Invitation.class))).willAnswer(invocation -> {
+            Invitation invitation = invocation.getArgument(0);
+            ReflectionTestUtils.setField(invitation, "id", 100L);
+            return invitation;
+        });
+
+        InvitationResponse response = invitationService.create(1L, 10L, request());
+
+        assertThat(response.getInvitationId()).isEqualTo(100L);
+        assertThat(response.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        assertThat(expiredInvitation.getStatus()).isEqualTo(InvitationStatus.EXPIRED);
+        verify(invitationRepository).save(any(Invitation.class));
     }
 
     @Test
@@ -495,6 +629,27 @@ class InvitationServiceTest {
         assertError(
                 () -> invitationService.accept(3L, 100L),
                 ErrorCode.INVITATION_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(projectMemberRepository);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
+    @Test
+    void accept_expiredInvitation() {
+        Invitation invitation = invitation(
+                100L,
+                project(10L),
+                member(1L, "owner@example.com", "owner"),
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.accept(2L, 100L),
+                ErrorCode.INVITATION_EXPIRED
         );
 
         verifyNoInteractions(projectMemberRepository);
@@ -611,6 +766,27 @@ class InvitationServiceTest {
         assertError(
                 () -> invitationService.reject(3L, 100L),
                 ErrorCode.INVITATION_ACCESS_DENIED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        verifyNoInteractions(projectMemberRepository);
+    }
+
+    @Test
+    void reject_expiredInvitation() {
+        Invitation invitation = invitation(
+                100L,
+                project(10L),
+                member(1L, "owner@example.com", "owner"),
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.reject(2L, 100L),
+                ErrorCode.INVITATION_EXPIRED
         );
 
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
@@ -793,6 +969,30 @@ class InvitationServiceTest {
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
     }
 
+    @Test
+    void cancel_expiredInvitation() {
+        Project project = project(10L);
+        Member ownerMember = member(1L, "owner@example.com", "owner");
+        ProjectMember owner = projectMember(ownerMember, project, ProjectMemberRole.OWNER);
+        Invitation invitation = invitation(
+                100L,
+                project,
+                ownerMember,
+                member(2L, "invitee@example.com", "invitee"),
+                LocalDateTime.of(2026, 8, 16, 9, 59)
+        );
+        givenProjectAndRequester(project, owner);
+        given(invitationRepository.findByIdForUpdate(100L))
+                .willReturn(Optional.of(invitation));
+
+        assertError(
+                () -> invitationService.cancel(1L, 10L, 100L),
+                ErrorCode.INVITATION_EXPIRED
+        );
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = InvitationStatus.class,
@@ -881,10 +1081,10 @@ class InvitationServiceTest {
                 project,
                 inviter,
                 invitee,
-                ProjectMemberRole.MEMBER
+                ProjectMemberRole.MEMBER,
+                createdAt
         );
         ReflectionTestUtils.setField(invitation, "id", id);
-        ReflectionTestUtils.setField(invitation, "createdAt", createdAt);
         return invitation;
     }
 

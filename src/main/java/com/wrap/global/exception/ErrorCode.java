@@ -70,6 +70,11 @@ public enum ErrorCode {
             "INVITATION_ALREADY_PROCESSED",
             "이미 처리된 초대입니다."
     ),
+    INVITATION_EXPIRED(
+            HttpStatus.GONE,
+            "INVITATION_EXPIRED",
+            "만료된 초대입니다."
+    ),
     INVITE_LINK_ALREADY_EXISTS(
             HttpStatus.CONFLICT,
             "INVITE_LINK_ALREADY_EXISTS",
@@ -84,6 +89,11 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "INVITE_LINK_ALREADY_REVOKED",
             "이미 비활성화된 프로젝트 초대 링크입니다."
+    ),
+    INVITE_LINK_EXPIRED(
+            HttpStatus.GONE,
+            "INVITE_LINK_EXPIRED",
+            "만료된 프로젝트 초대 링크입니다."
     ),
     INVITE_LINK_TOKEN_GENERATION_FAILED(
             HttpStatus.INTERNAL_SERVER_ERROR,

@@ -13,7 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface InvitationRepository extends JpaRepository<Invitation, Long> {
 
-    boolean existsByProjectIdAndInviteeIdAndStatus(
+    @EntityGraph(attributePaths = {"project", "invitee"})
+    List<Invitation> findAllByProjectIdAndInviteeIdAndStatus(
             Long projectId,
             Long inviteeId,
             InvitationStatus status

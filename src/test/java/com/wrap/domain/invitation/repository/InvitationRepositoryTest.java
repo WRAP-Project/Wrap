@@ -45,13 +45,15 @@ class InvitationRepositoryTest {
                 ProjectMemberRole.MEMBER
         ));
 
-        boolean exists = invitationRepository.existsByProjectIdAndInviteeIdAndStatus(
+        List<Invitation> invitations = invitationRepository
+                .findAllByProjectIdAndInviteeIdAndStatus(
                 project.getId(),
                 invitee.getId(),
                 InvitationStatus.INVITED
         );
 
-        assertThat(exists).isTrue();
+        assertThat(invitations).hasSize(1);
+        assertThat(invitations.getFirst().getInvitee().getId()).isEqualTo(invitee.getId());
     }
 
     @Test
@@ -68,13 +70,14 @@ class InvitationRepositoryTest {
         ReflectionTestUtils.setField(invitation, "status", InvitationStatus.ACCEPTED);
         invitationRepository.saveAndFlush(invitation);
 
-        boolean exists = invitationRepository.existsByProjectIdAndInviteeIdAndStatus(
+        List<Invitation> invitations = invitationRepository
+                .findAllByProjectIdAndInviteeIdAndStatus(
                 project.getId(),
                 invitee.getId(),
                 InvitationStatus.INVITED
         );
 
-        assertThat(exists).isFalse();
+        assertThat(invitations).isEmpty();
     }
 
     @Test

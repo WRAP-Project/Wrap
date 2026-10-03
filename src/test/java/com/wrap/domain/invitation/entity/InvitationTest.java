@@ -7,6 +7,7 @@ import com.wrap.domain.invitation.enums.InvitationStatus;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 
 class InvitationTest {
@@ -29,6 +30,59 @@ class InvitationTest {
         assertThat(invitation.getInvitee()).isSameAs(invitee);
         assertThat(invitation.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+        assertThat(invitation.getExpiresAt()).isNotNull();
+    }
+
+    @Test
+    void 초대는_생성_시각부터_정확히_7일_후에_만료된다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+
+        Invitation invitation = Invitation.create(
+                project(),
+                member("owner@example.com", "owner"),
+                member("member@example.com", "member"),
+                ProjectMemberRole.MEMBER,
+                issuedAt
+        );
+
+        assertThat(invitation.getCreatedAt()).isEqualTo(issuedAt);
+        assertThat(invitation.getExpiresAt()).isEqualTo(invitation.getCreatedAt().plusDays(7));
+        assertThat(invitation.isExpiredAt(issuedAt.plusDays(7).minusNanos(1))).isFalse();
+        assertThat(invitation.isExpiredAt(issuedAt.plusDays(7))).isTrue();
+    }
+
+    @Test
+    void 만료_시각이_되면_INVITED_초대를_EXPIRED로_변경한다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+        Invitation invitation = Invitation.create(
+                project(),
+                member("owner@example.com", "owner"),
+                member("member@example.com", "member"),
+                ProjectMemberRole.MEMBER,
+                issuedAt
+        );
+
+        assertThat(invitation.expireIfNeeded(issuedAt.plusDays(7).minusNanos(1))).isFalse();
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.INVITED);
+
+        assertThat(invitation.expireIfNeeded(issuedAt.plusDays(7))).isTrue();
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.EXPIRED);
+    }
+
+    @Test
+    void 이미_처리된_초대는_만료_상태로_변경하지_않는다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+        Invitation invitation = Invitation.create(
+                project(),
+                member("owner@example.com", "owner"),
+                member("member@example.com", "member"),
+                ProjectMemberRole.MEMBER,
+                issuedAt
+        );
+        invitation.accept();
+
+        assertThat(invitation.expireIfNeeded(issuedAt.plusDays(7))).isFalse();
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
     }
 
     @Test

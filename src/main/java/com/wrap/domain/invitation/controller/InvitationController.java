@@ -7,6 +7,7 @@ import com.wrap.domain.invitation.service.InvitationService;
 import com.wrap.global.common.ApiResponse;
 import com.wrap.global.security.MemberDetails;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,7 +30,10 @@ public class InvitationController {
 
     private final InvitationService invitationService;
 
-    @Operation(summary = "받은 프로젝트 초대 목록 조회")
+    @Operation(
+            summary = "받은 프로젝트 초대 목록 조회",
+            description = "만료되지 않은 대기 중(INVITED) 초대만 반환합니다."
+    )
     @GetMapping("/invitations")
     public ApiResponse<List<ReceivedInvitationResponse>> getReceivedInvitations(
             @AuthenticationPrincipal MemberDetails memberDetails
@@ -40,7 +44,10 @@ public class InvitationController {
         );
     }
 
-    @Operation(summary = "보낸 프로젝트 초대 목록 조회")
+    @Operation(
+            summary = "보낸 프로젝트 초대 목록 조회",
+            description = "처리 완료 및 만료(EXPIRED) 상태를 포함한 초대 이력을 반환합니다."
+    )
     @GetMapping("/projects/{projectId}/invitations")
     public ApiResponse<List<InvitationResponse>> getSentInvitations(
             @AuthenticationPrincipal MemberDetails memberDetails,
@@ -67,6 +74,11 @@ public class InvitationController {
     }
 
     @Operation(summary = "프로젝트 초대 수락")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "410", description = "초대가 만료됨"
+            )
+    })
     @PatchMapping("/invitations/{invitationId}/accept")
     public ApiResponse<InvitationResponse> accept(
             @AuthenticationPrincipal MemberDetails memberDetails,
@@ -79,6 +91,11 @@ public class InvitationController {
     }
 
     @Operation(summary = "프로젝트 초대 거절")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "410", description = "초대가 만료됨"
+            )
+    })
     @PatchMapping("/invitations/{invitationId}/reject")
     public ApiResponse<InvitationResponse> reject(
             @AuthenticationPrincipal MemberDetails memberDetails,
@@ -91,6 +108,11 @@ public class InvitationController {
     }
 
     @Operation(summary = "보낸 프로젝트 초대 취소")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "410", description = "초대가 만료됨"
+            )
+    })
     @DeleteMapping("/projects/{projectId}/invitations/{invitationId}")
     public ApiResponse<Void> cancel(
             @AuthenticationPrincipal MemberDetails memberDetails,

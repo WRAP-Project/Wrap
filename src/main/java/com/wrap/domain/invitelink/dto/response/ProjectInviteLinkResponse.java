@@ -29,11 +29,17 @@ public class ProjectInviteLinkResponse {
     )
     private String inviteUrl;
 
-    @Schema(description = "초대 링크 활성 여부", example = "true")
+    @Schema(
+            description = "관리자가 링크를 비활성화하지 않았는지 여부. 만료 여부는 expiresAt으로 판단합니다.",
+            example = "true"
+    )
     private boolean active;
 
     @Schema(description = "초대 링크 생성 시각", example = "2026-09-02T10:00:00")
     private LocalDateTime createdAt;
+
+    @Schema(description = "초대 링크 만료 시각", example = "2026-09-09T10:00:00")
+    private LocalDateTime expiresAt;
 
     @Schema(
             description = "초대 링크 비활성화 시각. 활성 링크이면 값이 없습니다.",
@@ -53,6 +59,7 @@ public class ProjectInviteLinkResponse {
                 .inviteUrl(inviteUrl)
                 .active(inviteLink.isActive())
                 .createdAt(inviteLink.getCreatedAt())
+                .expiresAt(inviteLink.getExpiresAt())
                 .revokedAt(inviteLink.getRevokedAt())
                 .build();
     }
