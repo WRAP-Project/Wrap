@@ -16,7 +16,6 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
 @Getter
 @Entity
@@ -33,6 +32,7 @@ import org.hibernate.annotations.CreationTimestamp;
 public class ProjectInviteLink {
 
     private static final int SHA_256_HEX_LENGTH = 64;
+    private static final long VALIDITY_DAYS = 7;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -52,9 +52,11 @@ public class ProjectInviteLink {
     @Column(nullable = false)
     private boolean active;
 
-    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "expires_at", nullable = false, updatable = false)
+    private LocalDateTime expiresAt;
 
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
@@ -64,12 +66,31 @@ public class ProjectInviteLink {
             Member createdBy,
             String tokenHash
     ) {
+        return create(project, createdBy, tokenHash, LocalDateTime.now());
+    }
+
+    public static ProjectInviteLink create(
+            Project project,
+            Member createdBy,
+            String tokenHash,
+            LocalDateTime issuedAt
+    ) {
         ProjectInviteLink inviteLink = new ProjectInviteLink();
         inviteLink.project = requireProject(project);
         inviteLink.createdBy = requireCreatedBy(createdBy);
         inviteLink.tokenHash = requireTokenHash(tokenHash);
         inviteLink.active = true;
+        inviteLink.createdAt = requireIssuedAt(issuedAt);
+        inviteLink.expiresAt = inviteLink.createdAt.plusDays(VALIDITY_DAYS);
         return inviteLink;
+    }
+
+    public boolean isExpiredAt(LocalDateTime now) {
+        return !requireNow(now).isBefore(expiresAt);
+    }
+
+    public boolean isUsableAt(LocalDateTime now) {
+        return active && !isExpiredAt(now);
     }
 
     public void revoke(LocalDateTime revokedAt) {
@@ -103,5 +124,19 @@ public class ProjectInviteLink {
             throw new IllegalArgumentException("초대 링크 토큰 해시는 SHA-256 형식이어야 합니다.");
         }
         return tokenHash;
+    }
+
+    private static LocalDateTime requireIssuedAt(LocalDateTime issuedAt) {
+        if (issuedAt == null) {
+            throw new IllegalArgumentException("초대 링크 생성 시각은 필수입니다.");
+        }
+        return issuedAt;
+    }
+
+    private static LocalDateTime requireNow(LocalDateTime now) {
+        if (now == null) {
+            throw new IllegalArgumentException("현재 시각은 필수입니다.");
+        }
+        return now;
     }
 }

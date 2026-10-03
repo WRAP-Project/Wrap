@@ -49,35 +49,53 @@ class ProjectInviteLinkRepositoryTest {
     }
 
     @Test
-    void 프로젝트의_활성_초대_링크를_조회한다() {
+    void 프로젝트에_만료되지_않은_활성_초대_링크가_있는지_확인한다() {
         Project project = projectRepository.save(project());
         Member creator = memberRepository.save(member());
-        ProjectInviteLink savedInviteLink = inviteLinkRepository.saveAndFlush(
-                ProjectInviteLink.create(project, creator, tokenHash('a'))
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 9, 1, 10, 0);
+        inviteLinkRepository.saveAndFlush(
+                ProjectInviteLink.create(project, creator, tokenHash('a'), issuedAt)
         );
 
-        ProjectInviteLink inviteLink = inviteLinkRepository
-                .findByProjectIdAndActiveTrue(project.getId())
-                .orElseThrow();
-
-        assertThat(inviteLink.getId()).isEqualTo(savedInviteLink.getId());
-        assertThat(inviteLink.isActive()).isTrue();
+        assertThat(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                project.getId(),
+                issuedAt.plusDays(7).minusNanos(1)
+        )).isTrue();
     }
 
     @Test
-    void 비활성화된_초대_링크는_활성_링크로_조회하지_않는다() {
+    void 비활성화된_초대_링크는_사용_가능한_링크로_계산하지_않는다() {
         Project project = projectRepository.save(project());
         Member creator = memberRepository.save(member());
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 9, 1, 10, 0);
         ProjectInviteLink inviteLink = ProjectInviteLink.create(
                 project,
                 creator,
-                tokenHash('a')
+                tokenHash('a'),
+                issuedAt
         );
         inviteLink.revoke(LocalDateTime.of(2026, 9, 1, 15, 0));
         inviteLinkRepository.saveAndFlush(inviteLink);
 
-        assertThat(inviteLinkRepository.findByProjectIdAndActiveTrue(project.getId()))
-                .isEmpty();
+        assertThat(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                project.getId(),
+                issuedAt.plusDays(1)
+        )).isFalse();
+    }
+
+    @Test
+    void 만료된_초대_링크는_사용_가능한_링크로_계산하지_않는다() {
+        Project project = projectRepository.save(project());
+        Member creator = memberRepository.save(member());
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 9, 1, 10, 0);
+        inviteLinkRepository.saveAndFlush(
+                ProjectInviteLink.create(project, creator, tokenHash('a'), issuedAt)
+        );
+
+        assertThat(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                project.getId(),
+                issuedAt.plusDays(7)
+        )).isFalse();
     }
 
     @Test

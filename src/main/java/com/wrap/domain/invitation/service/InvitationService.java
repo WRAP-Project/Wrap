@@ -15,6 +15,7 @@ import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -29,21 +30,31 @@ public class InvitationService {
     private final MemberRepository memberRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final InvitationRepository invitationRepository;
+    private final Clock clock;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ReceivedInvitationResponse> getReceivedInvitations(Long memberId) {
-        return invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(memberId)
-                .stream()
+        LocalDateTime now = now();
+        List<Invitation> invitations =
+                invitationRepository.findAllByInviteeIdOrderByCreatedAtDesc(memberId);
+        invitations.forEach(invitation -> invitation.expireIfNeeded(now));
+
+        return invitations.stream()
+                .filter(invitation -> invitation.getStatus() == InvitationStatus.INVITED)
                 .map(ReceivedInvitationResponse::from)
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<InvitationResponse> getSentInvitations(Long memberId, Long projectId) {
         findProjectForOwner(memberId, projectId);
 
-        return invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId)
-                .stream()
+        LocalDateTime now = now();
+        List<Invitation> invitations =
+                invitationRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId);
+        invitations.forEach(invitation -> invitation.expireIfNeeded(now));
+
+        return invitations.stream()
                 .map(InvitationResponse::from)
                 .toList();
     }
@@ -67,7 +78,8 @@ public class InvitationService {
                 project,
                 inviterProjectMember.getMember(),
                 invitee,
-                request.getRole()
+                request.getRole(),
+                now()
         );
 
         return InvitationResponse.from(invitationRepository.save(invitation));
@@ -98,6 +110,7 @@ public class InvitationService {
         Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
         validateInvitationProject(projectId, invitation);
+        validateInvitationNotExpired(invitation);
         validateInvitationPending(invitation);
         invitation.cancel();
     }
@@ -113,6 +126,7 @@ public class InvitationService {
         Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
         validateInvitee(memberId, invitation);
+        validateInvitationNotExpired(invitation);
         validateInvitationPending(invitation);
         validateProjectAvailable(invitation.getProject());
         return invitation;
@@ -133,6 +147,14 @@ public class InvitationService {
     private void validateInvitationPending(Invitation invitation) {
         if (invitation.getStatus() != InvitationStatus.INVITED) {
             throw new CustomException(ErrorCode.INVITATION_ALREADY_PROCESSED);
+        }
+    }
+
+    private void validateInvitationNotExpired(Invitation invitation) {
+        if (invitation.getStatus() == InvitationStatus.EXPIRED
+                || (invitation.getStatus() == InvitationStatus.INVITED
+                && invitation.isExpiredAt(now()))) {
+            throw new CustomException(ErrorCode.INVITATION_EXPIRED);
         }
     }
 
@@ -210,12 +232,24 @@ public class InvitationService {
     }
 
     private void validateNoActiveInvitation(Long projectId, Long inviteeId) {
-        if (invitationRepository.existsByProjectIdAndInviteeIdAndStatus(
-                projectId,
-                inviteeId,
-                InvitationStatus.INVITED
-        )) {
+        LocalDateTime now = now();
+        List<Invitation> invitations = invitationRepository
+                .findAllByProjectIdAndInviteeIdAndStatus(
+                        projectId,
+                        inviteeId,
+                        InvitationStatus.INVITED
+                );
+        invitations.forEach(invitation -> invitation.expireIfNeeded(now));
+
+        boolean hasActiveInvitation = invitations.stream()
+                .anyMatch(invitation -> invitation.getStatus() == InvitationStatus.INVITED);
+
+        if (hasActiveInvitation) {
             throw new CustomException(ErrorCode.INVITATION_ALREADY_EXISTS);
         }
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
     }
 }

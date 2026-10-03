@@ -2,6 +2,7 @@ package com.wrap.domain.invitelink.repository;
 
 import com.wrap.domain.invitelink.entity.ProjectInviteLink;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -26,8 +27,10 @@ public interface ProjectInviteLinkRepository extends JpaRepository<ProjectInvite
             """)
     Optional<ProjectInviteLink> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
 
-    @EntityGraph(attributePaths = {"createdBy"})
-    Optional<ProjectInviteLink> findByProjectIdAndActiveTrue(Long projectId);
+    boolean existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+            Long projectId,
+            LocalDateTime now
+    );
 
     @EntityGraph(attributePaths = {"createdBy"})
     List<ProjectInviteLink> findAllByProjectIdOrderByCreatedAtDesc(Long projectId);

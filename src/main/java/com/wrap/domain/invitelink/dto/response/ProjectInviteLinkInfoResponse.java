@@ -2,6 +2,7 @@ package com.wrap.domain.invitelink.dto.response;
 
 import com.wrap.domain.invitelink.entity.ProjectInviteLink;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -22,12 +23,16 @@ public class ProjectInviteLinkInfoResponse {
     @Schema(description = "초대 링크를 생성한 회원 닉네임", example = "홍길동")
     private String inviterNickname;
 
+    @Schema(description = "초대 링크 만료 시각", example = "2026-09-09T10:00:00")
+    private LocalDateTime expiresAt;
+
     public static ProjectInviteLinkInfoResponse from(ProjectInviteLink inviteLink) {
         return ProjectInviteLinkInfoResponse.builder()
                 .projectId(inviteLink.getProject().getId())
                 .projectName(inviteLink.getProject().getName())
                 .projectColor(inviteLink.getProject().getColor())
                 .inviterNickname(inviteLink.getCreatedBy().getNickname())
+                .expiresAt(inviteLink.getExpiresAt())
                 .build();
     }
 }

@@ -26,7 +26,9 @@ import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,9 @@ class ProjectInviteLinkServiceTest {
 
     private static final String RAW_TOKEN = "raw-token";
     private static final String TOKEN_HASH = "a".repeat(64);
+    private static final LocalDateTime CURRENT_TIME =
+            LocalDateTime.of(2026, 9, 2, 12, 0);
+    private static final ZoneId TEST_ZONE = ZoneId.of("Asia/Seoul");
 
     @Mock
     private ProjectRepository projectRepository;
@@ -61,9 +66,11 @@ class ProjectInviteLinkServiceTest {
     private InviteTokenGenerator tokenGenerator;
 
     private ProjectInviteLinkService inviteLinkService;
+    private Clock clock;
 
     @BeforeEach
     void setUp() {
+        clock = Clock.fixed(CURRENT_TIME.atZone(TEST_ZONE).toInstant(), TEST_ZONE);
         inviteLinkService = new ProjectInviteLinkService(
                 projectRepository,
                 memberRepository,
@@ -71,6 +78,7 @@ class ProjectInviteLinkServiceTest {
                 inviteLinkRepository,
                 projectMemberValidator,
                 tokenGenerator,
+                clock,
                 "https://wrap-client.vercel.app/join/"
         );
     }
@@ -87,8 +95,10 @@ class ProjectInviteLinkServiceTest {
         given(projectMemberValidator.findJoinedMember(1L, 10L)).willReturn(owner);
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
-        given(inviteLinkRepository.findByProjectIdAndActiveTrue(10L))
-                .willReturn(Optional.empty());
+        given(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                10L,
+                CURRENT_TIME
+        )).willReturn(false);
         given(tokenGenerator.generate())
                 .willReturn(new GeneratedInviteToken(RAW_TOKEN, TOKEN_HASH));
         given(inviteLinkRepository.existsByTokenHash(TOKEN_HASH)).willReturn(false);
@@ -104,6 +114,7 @@ class ProjectInviteLinkServiceTest {
         assertThat(response.getInviteUrl())
                 .isEqualTo("https://wrap-client.vercel.app/join/raw-token");
         assertThat(response.isActive()).isTrue();
+        assertThat(response.getExpiresAt()).isEqualTo(CURRENT_TIME.plusDays(7));
         verify(projectMemberValidator).validateOwner(owner);
         verify(inviteLinkRepository).save(any(ProjectInviteLink.class));
     }
@@ -117,16 +128,13 @@ class ProjectInviteLinkServiceTest {
                 project,
                 LocalDateTime.of(2026, 9, 1, 10, 0)
         );
-        ProjectInviteLink activeInviteLink = ProjectInviteLink.create(
-                project,
-                ownerMember,
-                TOKEN_HASH
-        );
         given(projectMemberValidator.findJoinedMember(1L, 10L)).willReturn(owner);
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
-        given(inviteLinkRepository.findByProjectIdAndActiveTrue(10L))
-                .willReturn(Optional.of(activeInviteLink));
+        given(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                10L,
+                CURRENT_TIME
+        )).willReturn(true);
 
         assertError(
                 () -> inviteLinkService.create(1L, 10L),
@@ -135,6 +143,35 @@ class ProjectInviteLinkServiceTest {
 
         verify(tokenGenerator, never()).generate();
         verify(inviteLinkRepository, never()).save(any());
+    }
+
+    @Test
+    void 기존_링크가_만료되었으면_새_초대_링크를_생성한다() {
+        Project project = project(10L);
+        Member ownerMember = member(1L);
+        ProjectMember owner = ProjectMember.createOwner(
+                ownerMember,
+                project,
+                LocalDateTime.of(2026, 9, 1, 10, 0)
+        );
+        given(projectMemberValidator.findJoinedMember(1L, 10L)).willReturn(owner);
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
+        given(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                10L,
+                CURRENT_TIME
+        )).willReturn(false);
+        given(tokenGenerator.generate())
+                .willReturn(new GeneratedInviteToken(RAW_TOKEN, TOKEN_HASH));
+        given(inviteLinkRepository.existsByTokenHash(TOKEN_HASH)).willReturn(false);
+        given(inviteLinkRepository.save(any(ProjectInviteLink.class)))
+                .willAnswer(invocation -> savedInviteLink(invocation.getArgument(0)));
+
+        ProjectInviteLinkResponse response = inviteLinkService.create(1L, 10L);
+
+        assertThat(response.getInviteLinkId()).isEqualTo(100L);
+        assertThat(response.isActive()).isTrue();
+        verify(inviteLinkRepository).save(any(ProjectInviteLink.class));
     }
 
     @Test
@@ -202,8 +239,10 @@ class ProjectInviteLinkServiceTest {
         given(projectMemberValidator.findJoinedMember(1L, 10L)).willReturn(owner);
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
-        given(inviteLinkRepository.findByProjectIdAndActiveTrue(10L))
-                .willReturn(Optional.empty());
+        given(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                10L,
+                CURRENT_TIME
+        )).willReturn(false);
         given(tokenGenerator.generate()).willReturn(collidedToken, uniqueToken);
         given(inviteLinkRepository.existsByTokenHash(collidedToken.tokenHash()))
                 .willReturn(true);
@@ -235,8 +274,10 @@ class ProjectInviteLinkServiceTest {
         given(projectMemberValidator.findJoinedMember(1L, 10L)).willReturn(owner);
         given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
                 .willReturn(Optional.of(project));
-        given(inviteLinkRepository.findByProjectIdAndActiveTrue(10L))
-                .willReturn(Optional.empty());
+        given(inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                10L,
+                CURRENT_TIME
+        )).willReturn(false);
         given(tokenGenerator.generate()).willReturn(collidedToken);
         given(inviteLinkRepository.existsByTokenHash(TOKEN_HASH)).willReturn(true);
 
@@ -284,6 +325,8 @@ class ProjectInviteLinkServiceTest {
                 .extracting(ProjectInviteLinkSummaryResponse::getInviteLinkId)
                 .containsExactly(200L, 100L);
         assertThat(responses.get(0).isActive()).isTrue();
+        assertThat(responses.get(0).getExpiresAt())
+                .isEqualTo(LocalDateTime.of(2026, 9, 8, 12, 0));
         assertThat(responses.get(1).isActive()).isFalse();
         assertThat(responses.get(1).getRevokedAt())
                 .isEqualTo(LocalDateTime.of(2026, 9, 1, 11, 0));
@@ -414,6 +457,8 @@ class ProjectInviteLinkServiceTest {
         assertThat(response.getProjectName()).isEqualTo("Wrap");
         assertThat(response.getProjectColor()).isEqualTo(Project.DEFAULT_COLOR);
         assertThat(response.getInviterNickname()).isEqualTo("owner");
+        assertThat(response.getExpiresAt())
+                .isEqualTo(LocalDateTime.of(2026, 9, 8, 11, 0));
     }
 
     @Test
@@ -445,6 +490,25 @@ class ProjectInviteLinkServiceTest {
         assertError(
                 () -> inviteLinkService.getInviteLinkInfo(RAW_TOKEN),
                 ErrorCode.INVITE_LINK_NOT_FOUND
+        );
+    }
+
+    @Test
+    void 만료된_초대_링크의_프로젝트_정보를_조회할_수_없다() {
+        ProjectInviteLink inviteLink = inviteLink(
+                100L,
+                project(10L),
+                member(1L),
+                TOKEN_HASH,
+                LocalDateTime.of(2026, 8, 26, 11, 0)
+        );
+        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
+        given(inviteLinkRepository.findByTokenHash(TOKEN_HASH))
+                .willReturn(Optional.of(inviteLink));
+
+        assertError(
+                () -> inviteLinkService.getInviteLinkInfo(RAW_TOKEN),
+                ErrorCode.INVITE_LINK_EXPIRED
         );
     }
 
@@ -626,6 +690,28 @@ class ProjectInviteLinkServiceTest {
     }
 
     @Test
+    void 만료된_초대_링크로_프로젝트에_참여할_수_없다() {
+        ProjectInviteLink inviteLink = inviteLink(
+                100L,
+                project(10L),
+                member(1L),
+                TOKEN_HASH,
+                LocalDateTime.of(2026, 8, 26, 11, 0)
+        );
+        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
+        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
+                .willReturn(Optional.of(inviteLink));
+
+        assertError(
+                () -> inviteLinkService.join(2L, RAW_TOKEN),
+                ErrorCode.INVITE_LINK_EXPIRED
+        );
+
+        verify(memberRepository, never()).findByIdAndDeletedAtIsNull(any());
+        verify(projectMemberRepository, never()).save(any());
+    }
+
+    @Test
     void 삭제된_회원은_초대_링크로_프로젝트에_참여할_수_없다() {
         Project project = project(10L);
         ProjectInviteLink inviteLink = inviteLink(
@@ -677,11 +763,6 @@ class ProjectInviteLinkServiceTest {
 
     private ProjectInviteLink savedInviteLink(ProjectInviteLink inviteLink) {
         ReflectionTestUtils.setField(inviteLink, "id", 100L);
-        ReflectionTestUtils.setField(
-                inviteLink,
-                "createdAt",
-                LocalDateTime.of(2026, 9, 1, 12, 0)
-        );
         return inviteLink;
     }
 
@@ -692,9 +773,13 @@ class ProjectInviteLinkServiceTest {
             String tokenHash,
             LocalDateTime createdAt
     ) {
-        ProjectInviteLink inviteLink = ProjectInviteLink.create(project, creator, tokenHash);
+        ProjectInviteLink inviteLink = ProjectInviteLink.create(
+                project,
+                creator,
+                tokenHash,
+                createdAt
+        );
         ReflectionTestUtils.setField(inviteLink, "id", id);
-        ReflectionTestUtils.setField(inviteLink, "createdAt", createdAt);
         return inviteLink;
     }
 

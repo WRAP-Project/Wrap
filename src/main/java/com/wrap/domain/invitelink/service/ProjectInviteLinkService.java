@@ -17,6 +17,7 @@ import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ public class ProjectInviteLinkService {
     private final ProjectInviteLinkRepository inviteLinkRepository;
     private final ProjectMemberValidator projectMemberValidator;
     private final InviteTokenGenerator tokenGenerator;
+    private final Clock clock;
     private final String inviteBaseUrl;
 
     public ProjectInviteLinkService(
@@ -43,6 +45,7 @@ public class ProjectInviteLinkService {
             ProjectInviteLinkRepository inviteLinkRepository,
             ProjectMemberValidator projectMemberValidator,
             InviteTokenGenerator tokenGenerator,
+            Clock clock,
             @Value("${app.invite-link.base-url}") String inviteBaseUrl
     ) {
         this.projectRepository = projectRepository;
@@ -51,6 +54,7 @@ public class ProjectInviteLinkService {
         this.inviteLinkRepository = inviteLinkRepository;
         this.projectMemberValidator = projectMemberValidator;
         this.tokenGenerator = tokenGenerator;
+        this.clock = clock;
         this.inviteBaseUrl = normalizeBaseUrl(inviteBaseUrl);
     }
 
@@ -62,13 +66,15 @@ public class ProjectInviteLinkService {
         Project project = projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
         validateProjectInProgress(project);
-        validateNoActiveInviteLink(projectId);
+        LocalDateTime now = now();
+        validateNoActiveInviteLink(projectId, now);
 
         GeneratedInviteToken generatedToken = generateUniqueToken();
         ProjectInviteLink inviteLink = inviteLinkRepository.save(ProjectInviteLink.create(
                 project,
                 creator.getMember(),
-                generatedToken.tokenHash()
+                generatedToken.tokenHash(),
+                now
         ));
 
         return ProjectInviteLinkResponse.from(
@@ -108,15 +114,15 @@ public class ProjectInviteLinkService {
             throw new CustomException(ErrorCode.INVITE_LINK_ALREADY_REVOKED);
         }
 
-        inviteLink.revoke(LocalDateTime.now());
+        inviteLink.revoke(now());
     }
 
     @Transactional(readOnly = true)
     public ProjectInviteLinkInfoResponse getInviteLinkInfo(String rawToken) {
         String tokenHash = tokenGenerator.hash(rawToken);
         ProjectInviteLink inviteLink = inviteLinkRepository.findByTokenHash(tokenHash)
-                .filter(ProjectInviteLink::isActive)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND));
+        validateInviteLinkUsable(inviteLink);
         validateProjectAvailable(inviteLink.getProject());
 
         return ProjectInviteLinkInfoResponse.from(inviteLink);
@@ -126,8 +132,8 @@ public class ProjectInviteLinkService {
     public ProjectInviteJoinResponse join(Long memberId, String rawToken) {
         String tokenHash = tokenGenerator.hash(rawToken);
         ProjectInviteLink inviteLink = inviteLinkRepository.findByTokenHashForUpdate(tokenHash)
-                .filter(ProjectInviteLink::isActive)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND));
+        validateInviteLinkUsable(inviteLink);
         validateProjectAvailable(inviteLink.getProject());
 
         Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
@@ -138,7 +144,7 @@ public class ProjectInviteLinkService {
     }
 
     private ProjectMember joinProject(Member member, Project project) {
-        LocalDateTime joinedAt = LocalDateTime.now();
+        LocalDateTime joinedAt = now();
 
         return projectMemberRepository.findByMemberIdAndProjectId(member.getId(), project.getId())
                 .map(projectMember -> {
@@ -167,9 +173,21 @@ public class ProjectInviteLinkService {
         throw new CustomException(ErrorCode.INVITE_LINK_TOKEN_GENERATION_FAILED);
     }
 
-    private void validateNoActiveInviteLink(Long projectId) {
-        if (inviteLinkRepository.findByProjectIdAndActiveTrue(projectId).isPresent()) {
+    private void validateNoActiveInviteLink(Long projectId, LocalDateTime now) {
+        if (inviteLinkRepository.existsByProjectIdAndActiveTrueAndExpiresAtAfter(
+                projectId,
+                now
+        )) {
             throw new CustomException(ErrorCode.INVITE_LINK_ALREADY_EXISTS);
+        }
+    }
+
+    private void validateInviteLinkUsable(ProjectInviteLink inviteLink) {
+        if (!inviteLink.isActive()) {
+            throw new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND);
+        }
+        if (inviteLink.isExpiredAt(now())) {
+            throw new CustomException(ErrorCode.INVITE_LINK_EXPIRED);
         }
     }
 
@@ -193,5 +211,9 @@ public class ProjectInviteLinkService {
         return baseUrl.endsWith("/")
                 ? baseUrl.substring(0, baseUrl.length() - 1)
                 : baseUrl;
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
     }
 }

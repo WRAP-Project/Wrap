@@ -2,6 +2,7 @@ package com.wrap.domain.invitation.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,8 @@ import com.wrap.domain.invitation.enums.InvitationStatus;
 import com.wrap.domain.invitation.service.InvitationService;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.global.security.MemberDetails;
 import com.wrap.global.security.SecurityConfig;
 import java.time.LocalDateTime;
@@ -54,6 +57,7 @@ class InvitationControllerTest {
                 .role(ProjectMemberRole.MEMBER)
                 .status(InvitationStatus.INVITED)
                 .createdAt(LocalDateTime.of(2026, 8, 18, 10, 0))
+                .expiresAt(LocalDateTime.of(2026, 8, 25, 10, 0))
                 .build();
         when(invitationService.getReceivedInvitations(1L)).thenReturn(List.of(response));
 
@@ -68,6 +72,7 @@ class InvitationControllerTest {
                 .andExpect(jsonPath("$.data[0].role").value("MEMBER"))
                 .andExpect(jsonPath("$.data[0].status").value("INVITED"))
                 .andExpect(jsonPath("$.data[0].createdAt").value("2026-08-18T10:00:00"))
+                .andExpect(jsonPath("$.data[0].expiresAt").value("2026-08-25T10:00:00"))
                 .andExpect(jsonPath("$.message")
                         .value("Received project invitations retrieved."));
 
@@ -109,6 +114,7 @@ class InvitationControllerTest {
                 .role(ProjectMemberRole.MEMBER)
                 .status(InvitationStatus.INVITED)
                 .createdAt(LocalDateTime.of(2026, 8, 18, 10, 0))
+                .expiresAt(LocalDateTime.of(2026, 8, 25, 10, 0))
                 .build();
         when(invitationService.getSentInvitations(1L, 10L))
                 .thenReturn(List.of(response));
@@ -127,6 +133,8 @@ class InvitationControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("INVITED"))
                 .andExpect(jsonPath("$.data[0].createdAt")
                         .value("2026-08-18T10:00:00"))
+                .andExpect(jsonPath("$.data[0].expiresAt")
+                        .value("2026-08-25T10:00:00"))
                 .andExpect(jsonPath("$.message")
                         .value("Sent project invitations retrieved."));
 
@@ -168,6 +176,7 @@ class InvitationControllerTest {
                 .role(ProjectMemberRole.MEMBER)
                 .status(InvitationStatus.INVITED)
                 .createdAt(LocalDateTime.of(2026, 8, 16, 10, 0))
+                .expiresAt(LocalDateTime.of(2026, 8, 23, 10, 0))
                 .build();
         when(invitationService.create(
                 eq(1L),
@@ -189,6 +198,7 @@ class InvitationControllerTest {
                 .andExpect(jsonPath("$.data.inviteeEmail").value("invitee@example.com"))
                 .andExpect(jsonPath("$.data.role").value("MEMBER"))
                 .andExpect(jsonPath("$.data.status").value("INVITED"))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-08-23T10:00:00"))
                 .andExpect(jsonPath("$.message").value("Project invitation created."));
 
         verify(invitationService).create(
@@ -314,6 +324,19 @@ class InvitationControllerTest {
     }
 
     @Test
+    void acceptExpiredInvitationReturnsGone() throws Exception {
+        when(invitationService.accept(2L, 100L))
+                .thenThrow(new CustomException(ErrorCode.INVITATION_EXPIRED));
+
+        mockMvc.perform(patch("/invitations/100/accept")
+                        .with(user(memberDetails(2L)))
+                        .with(csrf()))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVITATION_EXPIRED"));
+    }
+
+    @Test
     void rejectReturnsOkAndUsesAuthenticatedMemberId() throws Exception {
         InvitationResponse response = InvitationResponse.builder()
                 .invitationId(100L)
@@ -353,6 +376,19 @@ class InvitationControllerTest {
     }
 
     @Test
+    void rejectExpiredInvitationReturnsGone() throws Exception {
+        when(invitationService.reject(2L, 100L))
+                .thenThrow(new CustomException(ErrorCode.INVITATION_EXPIRED));
+
+        mockMvc.perform(patch("/invitations/100/reject")
+                        .with(user(memberDetails(2L)))
+                        .with(csrf()))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVITATION_EXPIRED"));
+    }
+
+    @Test
     void cancelReturnsOkAndUsesAuthenticatedMemberId() throws Exception {
         mockMvc.perform(delete("/projects/10/invitations/100")
                         .with(user(memberDetails(1L)))
@@ -375,6 +411,20 @@ class InvitationControllerTest {
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(invitationService);
+    }
+
+    @Test
+    void cancelExpiredInvitationReturnsGone() throws Exception {
+        doThrow(new CustomException(ErrorCode.INVITATION_EXPIRED))
+                .when(invitationService)
+                .cancel(1L, 10L, 100L);
+
+        mockMvc.perform(delete("/projects/10/invitations/100")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf()))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVITATION_EXPIRED"));
     }
 
     private String validRequest() {

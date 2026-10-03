@@ -54,6 +54,7 @@ class ProjectInviteLinkControllerTest {
                 .inviteUrl("https://wrap-client.vercel.app/join/raw-token")
                 .active(true)
                 .createdAt(LocalDateTime.of(2026, 9, 1, 12, 0))
+                .expiresAt(LocalDateTime.of(2026, 9, 8, 12, 0))
                 .build();
         when(inviteLinkService.create(1L, 10L)).thenReturn(response);
 
@@ -69,6 +70,7 @@ class ProjectInviteLinkControllerTest {
                 .andExpect(jsonPath("$.data.inviteUrl")
                         .value("https://wrap-client.vercel.app/join/raw-token"))
                 .andExpect(jsonPath("$.data.active").value(true))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-09-08T12:00:00"))
                 .andExpect(jsonPath("$.message").value("Project invite link created."));
 
         verify(inviteLinkService).create(1L, 10L);
@@ -93,6 +95,7 @@ class ProjectInviteLinkControllerTest {
                 .createdByNickname("owner")
                 .active(true)
                 .createdAt(LocalDateTime.of(2026, 9, 1, 12, 0))
+                .expiresAt(LocalDateTime.of(2026, 9, 8, 12, 0))
                 .build();
         when(inviteLinkService.getInviteLinks(1L, 10L)).thenReturn(List.of(response));
 
@@ -105,6 +108,8 @@ class ProjectInviteLinkControllerTest {
                 .andExpect(jsonPath("$.data[0].createdByMemberId").value(1))
                 .andExpect(jsonPath("$.data[0].createdByNickname").value("owner"))
                 .andExpect(jsonPath("$.data[0].active").value(true))
+                .andExpect(jsonPath("$.data[0].expiresAt")
+                        .value("2026-09-08T12:00:00"))
                 .andExpect(jsonPath("$.data[0].inviteUrl").doesNotExist())
                 .andExpect(jsonPath("$.message")
                         .value("Project invite links retrieved."));
@@ -152,6 +157,7 @@ class ProjectInviteLinkControllerTest {
                 .projectName("Wrap")
                 .projectColor("#CDEA6F")
                 .inviterNickname("owner")
+                .expiresAt(LocalDateTime.of(2026, 9, 8, 12, 0))
                 .build();
         when(inviteLinkService.getInviteLinkInfo("raw-token")).thenReturn(response);
 
@@ -162,6 +168,7 @@ class ProjectInviteLinkControllerTest {
                 .andExpect(jsonPath("$.data.projectName").value("Wrap"))
                 .andExpect(jsonPath("$.data.projectColor").value("#CDEA6F"))
                 .andExpect(jsonPath("$.data.inviterNickname").value("owner"))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-09-08T12:00:00"))
                 .andExpect(jsonPath("$.message")
                         .value("Project invite link information retrieved."));
 
@@ -236,6 +243,17 @@ class ProjectInviteLinkControllerTest {
     }
 
     @Test
+    void getInviteLinkInfoReturnsGoneForExpiredLink() throws Exception {
+        when(inviteLinkService.getInviteLinkInfo("expired-token"))
+                .thenThrow(new CustomException(ErrorCode.INVITE_LINK_EXPIRED));
+
+        mockMvc.perform(get("/invite-links/expired-token"))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVITE_LINK_EXPIRED"));
+    }
+
+    @Test
     void joinReturnsConflictWhenMemberAlreadyJoined() throws Exception {
         when(inviteLinkService.join(2L, "raw-token"))
                 .thenThrow(new CustomException(ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS));
@@ -247,6 +265,19 @@ class ProjectInviteLinkControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code")
                         .value("PROJECT_MEMBER_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void joinReturnsGoneForExpiredLink() throws Exception {
+        when(inviteLinkService.join(2L, "expired-token"))
+                .thenThrow(new CustomException(ErrorCode.INVITE_LINK_EXPIRED));
+
+        mockMvc.perform(post("/invite-links/expired-token/join")
+                        .with(user(memberDetails(2L)))
+                        .with(csrf()))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVITE_LINK_EXPIRED"));
     }
 
     @Test
