@@ -27,7 +27,53 @@ class ProjectInviteLinkTest {
         assertThat(inviteLink.getCreatedBy()).isSameAs(creator);
         assertThat(inviteLink.getTokenHash()).isEqualTo(TOKEN_HASH);
         assertThat(inviteLink.isActive()).isTrue();
+        assertThat(inviteLink.getExpiresAt()).isNotNull();
         assertThat(inviteLink.getRevokedAt()).isNull();
+    }
+
+    @Test
+    void 초대_링크는_생성_시각부터_정확히_7일_후에_만료된다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+
+        ProjectInviteLink inviteLink = ProjectInviteLink.create(
+                project(),
+                member(),
+                TOKEN_HASH,
+                issuedAt
+        );
+
+        assertThat(inviteLink.getCreatedAt()).isEqualTo(issuedAt);
+        assertThat(inviteLink.getExpiresAt()).isEqualTo(inviteLink.getCreatedAt().plusDays(7));
+        assertThat(inviteLink.isExpiredAt(issuedAt.plusDays(7).minusNanos(1))).isFalse();
+        assertThat(inviteLink.isExpiredAt(issuedAt.plusDays(7))).isTrue();
+    }
+
+    @Test
+    void 활성_링크라도_만료_시각부터는_사용할_수_없다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+        ProjectInviteLink inviteLink = ProjectInviteLink.create(
+                project(),
+                member(),
+                TOKEN_HASH,
+                issuedAt
+        );
+
+        assertThat(inviteLink.isUsableAt(issuedAt.plusDays(7).minusNanos(1))).isTrue();
+        assertThat(inviteLink.isUsableAt(issuedAt.plusDays(7))).isFalse();
+    }
+
+    @Test
+    void 비활성화된_링크는_만료_전에도_사용할_수_없다() {
+        LocalDateTime issuedAt = LocalDateTime.of(2026, 10, 2, 15, 0);
+        ProjectInviteLink inviteLink = ProjectInviteLink.create(
+                project(),
+                member(),
+                TOKEN_HASH,
+                issuedAt
+        );
+        inviteLink.revoke(issuedAt.plusDays(1));
+
+        assertThat(inviteLink.isUsableAt(issuedAt.plusDays(2))).isFalse();
     }
 
     @Test

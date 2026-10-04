@@ -19,13 +19,14 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
 @Getter
 @Entity
 @Table(name = "invitation")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Invitation {
+
+    private static final long VALIDITY_DAYS = 7;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,9 +52,11 @@ public class Invitation {
     @Column(nullable = false, length = 20)
     private InvitationStatus status;
 
-    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "expires_at", nullable = false, updatable = false)
+    private LocalDateTime expiresAt;
 
     public static Invitation create(
             Project project,
@@ -61,13 +64,38 @@ public class Invitation {
             Member invitee,
             ProjectMemberRole role
     ) {
+        return create(project, inviter, invitee, role, LocalDateTime.now());
+    }
+
+    public static Invitation create(
+            Project project,
+            Member inviter,
+            Member invitee,
+            ProjectMemberRole role,
+            LocalDateTime issuedAt
+    ) {
         Invitation invitation = new Invitation();
         invitation.project = requireProject(project);
         invitation.inviter = requireMember(inviter, "초대한 회원은 필수입니다.");
         invitation.invitee = requireMember(invitee, "초대 대상 회원은 필수입니다.");
         invitation.role = requireRole(role);
         invitation.status = InvitationStatus.INVITED;
+        invitation.createdAt = requireIssuedAt(issuedAt);
+        invitation.expiresAt = invitation.createdAt.plusDays(VALIDITY_DAYS);
         return invitation;
+    }
+
+    public boolean isExpiredAt(LocalDateTime now) {
+        return !requireNow(now).isBefore(expiresAt);
+    }
+
+    public boolean expireIfNeeded(LocalDateTime now) {
+        if (status != InvitationStatus.INVITED || !isExpiredAt(now)) {
+            return false;
+        }
+
+        this.status = InvitationStatus.EXPIRED;
+        return true;
     }
 
     public void accept() {
@@ -113,5 +141,19 @@ public class Invitation {
             throw new IllegalArgumentException("초대 역할은 필수입니다.");
         }
         return role;
+    }
+
+    private static LocalDateTime requireIssuedAt(LocalDateTime issuedAt) {
+        if (issuedAt == null) {
+            throw new IllegalArgumentException("초대 생성 시각은 필수입니다.");
+        }
+        return issuedAt;
+    }
+
+    private static LocalDateTime requireNow(LocalDateTime now) {
+        if (now == null) {
+            throw new IllegalArgumentException("현재 시각은 필수입니다.");
+        }
+        return now;
     }
 }
