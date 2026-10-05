@@ -191,6 +191,111 @@ class InvitationRepositoryTest {
                 .isEqualTo(LockModeType.PESSIMISTIC_WRITE);
     }
 
+    @Test
+    void 초대_ID로_프로젝트_ID를_조회한다() {
+        Project project = projectRepository.save(project());
+        Member inviter = memberRepository.save(member("owner@example.com", "owner"));
+        Member invitee = memberRepository.save(member("member@example.com", "member"));
+        Invitation savedInvitation = invitationRepository.saveAndFlush(Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.MEMBER
+        ));
+        entityManager.clear();
+
+        Long projectId = invitationRepository.findProjectIdById(savedInvitation.getId())
+                .orElseThrow();
+
+        assertThat(projectId).isEqualTo(project.getId());
+    }
+
+    @Test
+    void 프로젝트와_초대_대상으로_유효한_초대를_잠금_조회한다() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 1, 12, 0);
+        Project project = projectRepository.save(project());
+        Member inviter = memberRepository.save(member("owner@example.com", "owner"));
+        Member invitee = memberRepository.save(member("member@example.com", "member"));
+        Invitation validInvitation = Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.OWNER,
+                now.minusDays(1)
+        );
+        Invitation expiredInvitation = Invitation.create(
+                project,
+                inviter,
+                invitee,
+                ProjectMemberRole.MEMBER,
+                now.minusDays(7)
+        );
+        invitationRepository.saveAllAndFlush(List.of(validInvitation, expiredInvitation));
+        entityManager.clear();
+
+        Invitation invitation = invitationRepository
+                .findActiveByProjectIdAndInviteeIdForUpdate(
+                        project.getId(),
+                        invitee.getId(),
+                        InvitationStatus.INVITED,
+                        now
+                )
+                .orElseThrow();
+
+        assertThat(invitation.getId()).isEqualTo(validInvitation.getId());
+        assertThat(invitation.getRole()).isEqualTo(ProjectMemberRole.OWNER);
+        assertThat(entityManager.getLockMode(invitation))
+                .isEqualTo(LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
+    void 프로젝트_정원에는_만료되지_않은_대기_초대만_포함한다() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 1, 12, 0);
+        Project project = projectRepository.save(project("Capacity"));
+        Project otherProject = projectRepository.save(project("Other"));
+        Member inviter = memberRepository.save(member("capacity-owner@example.com", "owner"));
+
+        Invitation valid = Invitation.create(
+                project,
+                inviter,
+                memberRepository.save(member("valid@example.com", "valid")),
+                ProjectMemberRole.MEMBER,
+                now.minusDays(1)
+        );
+        Invitation expired = Invitation.create(
+                project,
+                inviter,
+                memberRepository.save(member("expired@example.com", "expired")),
+                ProjectMemberRole.MEMBER,
+                now.minusDays(7)
+        );
+        Invitation accepted = Invitation.create(
+                project,
+                inviter,
+                memberRepository.save(member("accepted@example.com", "accepted")),
+                ProjectMemberRole.MEMBER,
+                now.minusDays(1)
+        );
+        accepted.accept();
+        Invitation other = Invitation.create(
+                otherProject,
+                inviter,
+                memberRepository.save(member("other-capacity@example.com", "other")),
+                ProjectMemberRole.MEMBER,
+                now.minusDays(1)
+        );
+        invitationRepository.saveAllAndFlush(List.of(valid, expired, accepted, other));
+        entityManager.clear();
+
+        long count = invitationRepository.countByProjectIdAndStatusAndExpiresAtAfter(
+                project.getId(),
+                InvitationStatus.INVITED,
+                now
+        );
+
+        assertThat(count).isEqualTo(1);
+    }
+
     private Project project() {
         return project("Wrap");
     }

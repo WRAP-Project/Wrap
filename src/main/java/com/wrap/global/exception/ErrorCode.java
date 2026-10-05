@@ -50,6 +50,11 @@ public enum ErrorCode {
             "PROJECT_MEMBER_ALREADY_EXISTS",
             "이미 프로젝트에 참여 중인 회원입니다."
     ),
+    PROJECT_MEMBER_LIMIT_EXCEEDED(
+            HttpStatus.CONFLICT,
+            "PROJECT_MEMBER_LIMIT_EXCEEDED",
+            "프로젝트 최대 정원을 초과했습니다."
+    ),
     INVITATION_ALREADY_EXISTS(
             HttpStatus.CONFLICT,
             "INVITATION_ALREADY_EXISTS",

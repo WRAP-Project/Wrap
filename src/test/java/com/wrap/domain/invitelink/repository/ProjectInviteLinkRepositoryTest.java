@@ -49,6 +49,22 @@ class ProjectInviteLinkRepositoryTest {
     }
 
     @Test
+    void 토큰_해시로_프로젝트_ID를_조회한다() {
+        Project project = projectRepository.save(project());
+        Member creator = memberRepository.save(member());
+        ProjectInviteLink savedInviteLink = inviteLinkRepository.saveAndFlush(
+                ProjectInviteLink.create(project, creator, tokenHash('a'))
+        );
+        entityManager.clear();
+
+        Long projectId = inviteLinkRepository
+                .findProjectIdByTokenHash(savedInviteLink.getTokenHash())
+                .orElseThrow();
+
+        assertThat(projectId).isEqualTo(project.getId());
+    }
+
+    @Test
     void 프로젝트에_만료되지_않은_활성_초대_링크가_있는지_확인한다() {
         Project project = projectRepository.save(project());
         Member creator = memberRepository.save(member());

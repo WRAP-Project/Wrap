@@ -6,6 +6,9 @@ import com.wrap.domain.invitelink.dto.response.ProjectInviteJoinResponse;
 import com.wrap.domain.invitelink.dto.response.ProjectInviteLinkSummaryResponse;
 import com.wrap.domain.invitelink.entity.ProjectInviteLink;
 import com.wrap.domain.invitelink.repository.ProjectInviteLinkRepository;
+import com.wrap.domain.invitation.entity.Invitation;
+import com.wrap.domain.invitation.enums.InvitationStatus;
+import com.wrap.domain.invitation.repository.InvitationRepository;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.entity.Project;
@@ -14,6 +17,7 @@ import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.projectmember.service.ProjectMemberCapacityValidator;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
@@ -33,7 +37,9 @@ public class ProjectInviteLinkService {
     private final MemberRepository memberRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectInviteLinkRepository inviteLinkRepository;
+    private final InvitationRepository invitationRepository;
     private final ProjectMemberValidator projectMemberValidator;
+    private final ProjectMemberCapacityValidator projectMemberCapacityValidator;
     private final InviteTokenGenerator tokenGenerator;
     private final Clock clock;
     private final String inviteBaseUrl;
@@ -43,7 +49,9 @@ public class ProjectInviteLinkService {
             MemberRepository memberRepository,
             ProjectMemberRepository projectMemberRepository,
             ProjectInviteLinkRepository inviteLinkRepository,
+            InvitationRepository invitationRepository,
             ProjectMemberValidator projectMemberValidator,
+            ProjectMemberCapacityValidator projectMemberCapacityValidator,
             InviteTokenGenerator tokenGenerator,
             Clock clock,
             @Value("${app.invite-link.base-url}") String inviteBaseUrl
@@ -52,7 +60,9 @@ public class ProjectInviteLinkService {
         this.memberRepository = memberRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.inviteLinkRepository = inviteLinkRepository;
+        this.invitationRepository = invitationRepository;
         this.projectMemberValidator = projectMemberValidator;
+        this.projectMemberCapacityValidator = projectMemberCapacityValidator;
         this.tokenGenerator = tokenGenerator;
         this.clock = clock;
         this.inviteBaseUrl = normalizeBaseUrl(inviteBaseUrl);
@@ -131,35 +141,65 @@ public class ProjectInviteLinkService {
     @Transactional
     public ProjectInviteJoinResponse join(Long memberId, String rawToken) {
         String tokenHash = tokenGenerator.hash(rawToken);
+        Long projectId = inviteLinkRepository.findProjectIdByTokenHash(tokenHash)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND));
+        Project project = projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND));
         ProjectInviteLink inviteLink = inviteLinkRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVITE_LINK_NOT_FOUND));
         validateInviteLinkUsable(inviteLink);
-        validateProjectAvailable(inviteLink.getProject());
+        validateProjectAvailable(project);
 
         Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
-        ProjectMember projectMember = joinProject(member, inviteLink.getProject());
+        ProjectMember projectMember = joinProject(member, project);
 
         return ProjectInviteJoinResponse.from(projectMember);
     }
 
     private ProjectMember joinProject(Member member, Project project) {
         LocalDateTime joinedAt = now();
+        ProjectMember existingProjectMember = projectMemberRepository
+                .findByMemberIdAndProjectId(member.getId(), project.getId())
+                .orElse(null);
+        if (existingProjectMember != null
+                && existingProjectMember.getStatus() != ProjectMemberStatus.LEFT) {
+            throw new CustomException(ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS);
+        }
 
-        return projectMemberRepository.findByMemberIdAndProjectId(member.getId(), project.getId())
-                .map(projectMember -> {
-                    if (projectMember.getStatus() != ProjectMemberStatus.LEFT) {
-                        throw new CustomException(ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS);
-                    }
-                    projectMember.rejoin(ProjectMemberRole.MEMBER, joinedAt);
-                    return projectMember;
-                })
-                .orElseGet(() -> projectMemberRepository.save(ProjectMember.join(
-                        member,
-                        project,
-                        ProjectMemberRole.MEMBER,
+        Invitation activeInvitation = invitationRepository
+                .findActiveByProjectIdAndInviteeIdForUpdate(
+                        project.getId(),
+                        member.getId(),
+                        InvitationStatus.INVITED,
                         joinedAt
-                )));
+                )
+                .orElse(null);
+        ProjectMemberRole role = activeInvitation == null
+                ? ProjectMemberRole.MEMBER
+                : activeInvitation.getRole();
+
+        if (activeInvitation == null) {
+            projectMemberCapacityValidator.validateSeatAvailable(project.getId(), joinedAt);
+        }
+
+        ProjectMember projectMember;
+        if (existingProjectMember == null) {
+            projectMember = projectMemberRepository.save(ProjectMember.join(
+                    member,
+                    project,
+                    role,
+                    joinedAt
+            ));
+        } else {
+            existingProjectMember.rejoin(role, joinedAt);
+            projectMember = existingProjectMember;
+        }
+
+        if (activeInvitation != null) {
+            activeInvitation.accept();
+        }
+        return projectMember;
     }
 
     private GeneratedInviteToken generateUniqueToken() {

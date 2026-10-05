@@ -78,4 +78,9 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             ProjectMemberRole role,
             ProjectMemberStatus status
     );
+
+    long countByProjectIdAndStatus(
+            Long projectId,
+            ProjectMemberStatus status
+    );
 }
