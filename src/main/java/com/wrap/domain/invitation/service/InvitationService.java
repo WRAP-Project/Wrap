@@ -13,6 +13,7 @@ import com.wrap.domain.project.repository.ProjectRepository;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.projectmember.service.ProjectMemberCapacityValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.Clock;
@@ -30,6 +31,7 @@ public class InvitationService {
     private final MemberRepository memberRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final InvitationRepository invitationRepository;
+    private final ProjectMemberCapacityValidator projectMemberCapacityValidator;
     private final Clock clock;
 
     @Transactional
@@ -65,21 +67,23 @@ public class InvitationService {
             Long projectId,
             InvitationCreateRequest request
     ) {
-        Project project = findActiveProject(projectId);
+        Project project = findActiveProjectForUpdate(projectId);
         ProjectMember inviterProjectMember = findJoinedMember(memberId, projectId);
         validateOwner(inviterProjectMember);
         validateProjectInProgress(project);
 
+        LocalDateTime issuedAt = now();
         Member invitee = findActiveMemberByEmail(request.getEmail().trim());
         validateNotJoinedMember(invitee.getId(), projectId);
-        validateNoActiveInvitation(projectId, invitee.getId());
+        validateNoActiveInvitation(projectId, invitee.getId(), issuedAt);
+        projectMemberCapacityValidator.validateSeatAvailable(projectId, issuedAt);
 
         Invitation invitation = Invitation.create(
                 project,
                 inviterProjectMember.getMember(),
                 invitee,
                 request.getRole(),
-                now()
+                issuedAt
         );
 
         return InvitationResponse.from(invitationRepository.save(invitation));
@@ -87,7 +91,10 @@ public class InvitationService {
 
     @Transactional
     public InvitationResponse accept(Long memberId, Long invitationId) {
-        Invitation invitation = findPendingInvitationForInvitee(memberId, invitationId);
+        Invitation invitation = findPendingInvitationForInviteeWithProjectLock(
+                memberId,
+                invitationId
+        );
         joinProject(invitation);
         invitation.accept();
 
@@ -132,6 +139,23 @@ public class InvitationService {
         return invitation;
     }
 
+    private Invitation findPendingInvitationForInviteeWithProjectLock(
+            Long memberId,
+            Long invitationId
+    ) {
+        Long projectId = invitationRepository.findProjectIdById(invitationId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+        Project project = projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
+        Invitation invitation = invitationRepository.findByIdForUpdate(invitationId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+        validateInvitee(memberId, invitation);
+        validateInvitationNotExpired(invitation);
+        validateInvitationPending(invitation);
+        validateProjectInProgress(project);
+        return invitation;
+    }
+
     private void validateInvitationProject(Long projectId, Invitation invitation) {
         if (!invitation.getProject().getId().equals(projectId)) {
             throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
@@ -168,7 +192,7 @@ public class InvitationService {
     private void joinProject(Invitation invitation) {
         Project project = invitation.getProject();
         Member invitee = invitation.getInvitee();
-        LocalDateTime joinedAt = LocalDateTime.now();
+        LocalDateTime joinedAt = now();
 
         projectMemberRepository.findByMemberIdAndProjectId(invitee.getId(), project.getId())
                 .ifPresentOrElse(
@@ -191,6 +215,11 @@ public class InvitationService {
 
     private Project findActiveProject(Long projectId) {
         return projectRepository.findByIdAndDeletedAtIsNull(projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    private Project findActiveProjectForUpdate(Long projectId) {
+        return projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
@@ -231,8 +260,11 @@ public class InvitationService {
         }
     }
 
-    private void validateNoActiveInvitation(Long projectId, Long inviteeId) {
-        LocalDateTime now = now();
+    private void validateNoActiveInvitation(
+            Long projectId,
+            Long inviteeId,
+            LocalDateTime now
+    ) {
         List<Invitation> invitations = invitationRepository
                 .findAllByProjectIdAndInviteeIdAndStatus(
                         projectId,

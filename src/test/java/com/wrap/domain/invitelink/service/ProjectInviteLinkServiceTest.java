@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.wrap.domain.invitelink.dto.response.ProjectInviteLinkResponse;
 import com.wrap.domain.invitelink.dto.response.ProjectInviteLinkInfoResponse;
@@ -15,6 +17,9 @@ import com.wrap.domain.invitelink.dto.response.ProjectInviteJoinResponse;
 import com.wrap.domain.invitelink.dto.response.ProjectInviteLinkSummaryResponse;
 import com.wrap.domain.invitelink.entity.ProjectInviteLink;
 import com.wrap.domain.invitelink.repository.ProjectInviteLinkRepository;
+import com.wrap.domain.invitation.entity.Invitation;
+import com.wrap.domain.invitation.enums.InvitationStatus;
+import com.wrap.domain.invitation.repository.InvitationRepository;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.member.repository.MemberRepository;
 import com.wrap.domain.project.entity.Project;
@@ -23,6 +28,7 @@ import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.projectmember.service.ProjectMemberCapacityValidator;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
@@ -35,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -60,7 +67,13 @@ class ProjectInviteLinkServiceTest {
     private ProjectInviteLinkRepository inviteLinkRepository;
 
     @Mock
+    private InvitationRepository invitationRepository;
+
+    @Mock
     private ProjectMemberValidator projectMemberValidator;
+
+    @Mock
+    private ProjectMemberCapacityValidator projectMemberCapacityValidator;
 
     @Mock
     private InviteTokenGenerator tokenGenerator;
@@ -76,7 +89,9 @@ class ProjectInviteLinkServiceTest {
                 memberRepository,
                 projectMemberRepository,
                 inviteLinkRepository,
+                invitationRepository,
                 projectMemberValidator,
+                projectMemberCapacityValidator,
                 tokenGenerator,
                 clock,
                 "https://wrap-client.vercel.app/join/"
@@ -567,9 +582,7 @@ class ProjectInviteLinkServiceTest {
                 TOKEN_HASH,
                 LocalDateTime.of(2026, 9, 1, 11, 0)
         );
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
         given(memberRepository.findByIdAndDeletedAtIsNull(2L))
                 .willReturn(Optional.of(joiner));
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
@@ -591,6 +604,62 @@ class ProjectInviteLinkServiceTest {
         assertThat(response.getWorkRole()).isEqualTo("프론트엔드");
         assertThat(response.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
         assertThat(response.getJoinedAt()).isNotNull();
+        verify(projectMemberCapacityValidator).validateSeatAvailable(10L, CURRENT_TIME);
+
+        InOrder order = inOrder(
+                inviteLinkRepository,
+                projectRepository,
+                projectMemberCapacityValidator
+        );
+        order.verify(inviteLinkRepository).findProjectIdByTokenHash(TOKEN_HASH);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(inviteLinkRepository).findByTokenHashForUpdate(TOKEN_HASH);
+        order.verify(projectMemberCapacityValidator).validateSeatAvailable(10L, CURRENT_TIME);
+    }
+
+    @Test
+    void 이메일_초대가_있으면_예약된_자리와_초대_권한으로_링크_참여한다() {
+        Project project = project(10L);
+        Member creator = member(1L);
+        Member joiner = member(2L, "joiner@example.com", "joiner");
+        ProjectInviteLink inviteLink = inviteLink(
+                100L,
+                project,
+                creator,
+                TOKEN_HASH,
+                LocalDateTime.of(2026, 9, 1, 11, 0)
+        );
+        Invitation invitation = Invitation.create(
+                project,
+                creator,
+                joiner,
+                ProjectMemberRole.OWNER,
+                LocalDateTime.of(2026, 9, 1, 10, 0)
+        );
+        givenJoinTarget(project, inviteLink);
+        given(memberRepository.findByIdAndDeletedAtIsNull(2L))
+                .willReturn(Optional.of(joiner));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.empty());
+        given(invitationRepository.findActiveByProjectIdAndInviteeIdForUpdate(
+                10L,
+                2L,
+                InvitationStatus.INVITED,
+                CURRENT_TIME
+        )).willReturn(Optional.of(invitation));
+        given(projectMemberRepository.save(any(ProjectMember.class)))
+                .willAnswer(invocation -> {
+                    ProjectMember projectMember = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(projectMember, "id", 200L);
+                    return projectMember;
+                });
+
+        ProjectInviteJoinResponse response = inviteLinkService.join(2L, RAW_TOKEN);
+
+        assertThat(response.getRole()).isEqualTo(ProjectMemberRole.OWNER);
+        assertThat(response.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        verifyNoInteractions(projectMemberCapacityValidator);
     }
 
     @Test
@@ -615,9 +684,7 @@ class ProjectInviteLinkServiceTest {
         ReflectionTestUtils.setField(leftMember, "id", 200L);
         leftMember.leave();
         joiner.updateProfile(null, null, "QA", null, null);
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
         given(memberRepository.findByIdAndDeletedAtIsNull(2L))
                 .willReturn(Optional.of(joiner));
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
@@ -629,6 +696,71 @@ class ProjectInviteLinkServiceTest {
         assertThat(response.getRole()).isEqualTo(ProjectMemberRole.MEMBER);
         assertThat(response.getWorkRole()).isEqualTo("백엔드");
         assertThat(response.getStatus()).isEqualTo(ProjectMemberStatus.JOINED);
+        verify(projectMemberCapacityValidator).validateSeatAvailable(10L, CURRENT_TIME);
+        verify(projectMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void 정원이_가득_차면_초대_링크로_신규_참여할_수_없다() {
+        Project project = project(10L);
+        Member joiner = member(2L, "joiner@example.com", "joiner");
+        ProjectInviteLink inviteLink = inviteLink(
+                100L,
+                project,
+                member(1L),
+                TOKEN_HASH,
+                LocalDateTime.of(2026, 9, 1, 11, 0)
+        );
+        givenJoinTarget(project, inviteLink);
+        given(memberRepository.findByIdAndDeletedAtIsNull(2L))
+                .willReturn(Optional.of(joiner));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.empty());
+        willThrow(new CustomException(ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED))
+                .given(projectMemberCapacityValidator)
+                .validateSeatAvailable(10L, CURRENT_TIME);
+
+        assertError(
+                () -> inviteLinkService.join(2L, RAW_TOKEN),
+                ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED
+        );
+
+        verify(projectMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void 정원이_가득_차면_탈퇴한_회원도_초대_링크로_재참여할_수_없다() {
+        Project project = project(10L);
+        Member joiner = member(2L, "joiner@example.com", "joiner");
+        ProjectInviteLink inviteLink = inviteLink(
+                100L,
+                project,
+                member(1L),
+                TOKEN_HASH,
+                LocalDateTime.of(2026, 9, 1, 11, 0)
+        );
+        ProjectMember leftMember = ProjectMember.join(
+                joiner,
+                project,
+                ProjectMemberRole.MEMBER,
+                LocalDateTime.of(2026, 8, 1, 10, 0)
+        );
+        leftMember.leave();
+        givenJoinTarget(project, inviteLink);
+        given(memberRepository.findByIdAndDeletedAtIsNull(2L))
+                .willReturn(Optional.of(joiner));
+        given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
+                .willReturn(Optional.of(leftMember));
+        willThrow(new CustomException(ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED))
+                .given(projectMemberCapacityValidator)
+                .validateSeatAvailable(10L, CURRENT_TIME);
+
+        assertError(
+                () -> inviteLinkService.join(2L, RAW_TOKEN),
+                ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED
+        );
+
+        assertThat(leftMember.getStatus()).isEqualTo(ProjectMemberStatus.LEFT);
         verify(projectMemberRepository, never()).save(any());
     }
 
@@ -650,9 +782,7 @@ class ProjectInviteLinkServiceTest {
                 ProjectMemberRole.MEMBER,
                 LocalDateTime.of(2026, 8, 1, 10, 0)
         );
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
         given(memberRepository.findByIdAndDeletedAtIsNull(2L))
                 .willReturn(Optional.of(joiner));
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
@@ -663,6 +793,7 @@ class ProjectInviteLinkServiceTest {
                 ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS
         );
 
+        verifyNoInteractions(projectMemberCapacityValidator);
         verify(projectMemberRepository, never()).save(any());
     }
 
@@ -677,9 +808,7 @@ class ProjectInviteLinkServiceTest {
                 LocalDateTime.of(2026, 9, 1, 11, 0)
         );
         inviteLink.revoke(LocalDateTime.of(2026, 9, 1, 12, 0));
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
 
         assertError(
                 () -> inviteLinkService.join(2L, RAW_TOKEN),
@@ -691,16 +820,15 @@ class ProjectInviteLinkServiceTest {
 
     @Test
     void 만료된_초대_링크로_프로젝트에_참여할_수_없다() {
+        Project project = project(10L);
         ProjectInviteLink inviteLink = inviteLink(
                 100L,
-                project(10L),
+                project,
                 member(1L),
                 TOKEN_HASH,
                 LocalDateTime.of(2026, 8, 26, 11, 0)
         );
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
 
         assertError(
                 () -> inviteLinkService.join(2L, RAW_TOKEN),
@@ -721,9 +849,7 @@ class ProjectInviteLinkServiceTest {
                 TOKEN_HASH,
                 LocalDateTime.of(2026, 9, 1, 11, 0)
         );
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
         given(memberRepository.findByIdAndDeletedAtIsNull(2L))
                 .willReturn(Optional.empty());
 
@@ -748,9 +874,7 @@ class ProjectInviteLinkServiceTest {
                 TOKEN_HASH,
                 LocalDateTime.of(2026, 9, 1, 11, 0)
         );
-        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
-        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
-                .willReturn(Optional.of(inviteLink));
+        givenJoinTarget(project, inviteLink);
 
         assertError(
                 () -> inviteLinkService.join(2L, RAW_TOKEN),
@@ -759,6 +883,16 @@ class ProjectInviteLinkServiceTest {
 
         verify(memberRepository, never()).findByIdAndDeletedAtIsNull(any());
         verify(projectMemberRepository, never()).save(any());
+    }
+
+    private void givenJoinTarget(Project project, ProjectInviteLink inviteLink) {
+        given(tokenGenerator.hash(RAW_TOKEN)).willReturn(TOKEN_HASH);
+        given(inviteLinkRepository.findProjectIdByTokenHash(TOKEN_HASH))
+                .willReturn(Optional.of(project.getId()));
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(project.getId()))
+                .willReturn(Optional.of(project));
+        given(inviteLinkRepository.findByTokenHashForUpdate(TOKEN_HASH))
+                .willReturn(Optional.of(inviteLink));
     }
 
     private ProjectInviteLink savedInviteLink(ProjectInviteLink inviteLink) {

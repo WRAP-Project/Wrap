@@ -18,6 +18,10 @@ public interface ProjectInviteLinkRepository extends JpaRepository<ProjectInvite
     @EntityGraph(attributePaths = {"project", "createdBy"})
     Optional<ProjectInviteLink> findByTokenHash(String tokenHash);
 
+    @Query("select inviteLink.project.id from ProjectInviteLink inviteLink "
+            + "where inviteLink.tokenHash = :tokenHash")
+    Optional<Long> findProjectIdByTokenHash(@Param("tokenHash") String tokenHash);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"project", "createdBy"})
     @Query("""

@@ -182,6 +182,40 @@ class ProjectMemberRepositoryTest {
         assertThat(found.getWorkRole()).isNull();
     }
 
+    @Test
+    void countsOnlyJoinedMembersForProjectCapacity() {
+        Project project = project("Capacity", ProjectStatus.IN_PROGRESS);
+        Project otherProject = project("Other", ProjectStatus.IN_PROGRESS);
+
+        join(member("owner@example.com"), project, ProjectMemberRole.OWNER);
+        join(member("joined@example.com"), project, ProjectMemberRole.MEMBER);
+
+        ProjectMember left = join(
+                member("left-capacity@example.com"),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        left.leave();
+
+        ProjectMember invited = join(
+                member("invited-capacity@example.com"),
+                project,
+                ProjectMemberRole.MEMBER
+        );
+        ReflectionTestUtils.setField(invited, "status", ProjectMemberStatus.INVITED);
+
+        join(member("other-capacity@example.com"), otherProject, ProjectMemberRole.OWNER);
+        entityManager.flush();
+        entityManager.clear();
+
+        long count = projectMemberRepository.countByProjectIdAndStatus(
+                project.getId(),
+                ProjectMemberStatus.JOINED
+        );
+
+        assertThat(count).isEqualTo(2);
+    }
+
     private Member member(String email) {
         return member(email, "member", null);
     }

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +25,7 @@ import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.projectmember.repository.ProjectMemberRepository;
+import com.wrap.domain.projectmember.service.ProjectMemberCapacityValidator;
 import com.wrap.global.exception.CustomException;
 import com.wrap.global.exception.ErrorCode;
 import java.time.Clock;
@@ -38,6 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -60,6 +64,9 @@ class InvitationServiceTest {
 
     @Mock
     private InvitationRepository invitationRepository;
+
+    @Mock
+    private ProjectMemberCapacityValidator projectMemberCapacityValidator;
 
     @Mock
     private Clock clock;
@@ -306,7 +313,8 @@ class InvitationServiceTest {
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
         InvitationCreateRequest request = request("  invitee@example.com  ", ProjectMemberRole.MEMBER);
 
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(project));
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
                 10L,
@@ -339,12 +347,27 @@ class InvitationServiceTest {
         assertThat(response.getStatus()).isEqualTo(InvitationStatus.INVITED);
         assertThat(response.getExpiresAt()).isEqualTo(CURRENT_TIME.plusDays(7));
         verify(memberRepository).findByEmail("invitee@example.com");
+        verify(projectMemberCapacityValidator).validateSeatAvailable(10L, CURRENT_TIME);
         verify(invitationRepository).save(any(Invitation.class));
+
+        InOrder order = inOrder(
+                projectRepository,
+                projectMemberRepository,
+                projectMemberCapacityValidator
+        );
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(projectMemberRepository).findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        );
+        order.verify(projectMemberCapacityValidator).validateSeatAvailable(10L, CURRENT_TIME);
     }
 
     @Test
     void create_projectNotFound() {
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.empty());
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.empty());
 
         assertError(
                 () -> invitationService.create(1L, 10L, request()),
@@ -357,7 +380,8 @@ class InvitationServiceTest {
     @Test
     void create_accessDenied() {
         Project project = project(10L);
-        given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(project));
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
                 10L,
@@ -381,7 +405,7 @@ class InvitationServiceTest {
                 project,
                 ProjectMemberRole.MEMBER
         );
-        givenProjectAndRequester(project, projectMember);
+        givenLockedProjectAndRequester(project, projectMember);
 
         assertError(
                 () -> invitationService.create(1L, 10L, request()),
@@ -397,7 +421,7 @@ class InvitationServiceTest {
         project.complete(LocalDateTime.of(2026, 8, 16, 9, 0));
         Member inviter = member(1L, "owner@example.com", "owner");
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
 
         assertError(
                 () -> invitationService.create(1L, 10L, request()),
@@ -412,7 +436,7 @@ class InvitationServiceTest {
         Project project = project(10L);
         Member inviter = member(1L, "owner@example.com", "owner");
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
         given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.empty());
 
         assertError(
@@ -430,7 +454,7 @@ class InvitationServiceTest {
         Member invitee = member(2L, "invitee@example.com", "invitee");
         ReflectionTestUtils.setField(invitee, "deletedAt", LocalDateTime.now());
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
         given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
 
         assertError(
@@ -447,7 +471,7 @@ class InvitationServiceTest {
         Member inviter = member(1L, "owner@example.com", "owner");
         Member invitee = member(2L, "invitee@example.com", "invitee");
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
         given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
         given(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
                 2L,
@@ -469,7 +493,7 @@ class InvitationServiceTest {
         Member inviter = member(1L, "owner@example.com", "owner");
         Member invitee = member(2L, "invitee@example.com", "invitee");
         ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
         given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
         given(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
                 2L,
@@ -510,7 +534,7 @@ class InvitationServiceTest {
                 invitee,
                 LocalDateTime.of(2026, 8, 16, 9, 59)
         );
-        givenProjectAndRequester(project, owner);
+        givenLockedProjectAndRequester(project, owner);
         given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
         given(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
                 2L,
@@ -537,6 +561,36 @@ class InvitationServiceTest {
     }
 
     @Test
+    void create_projectCapacityExceeded() {
+        Project project = project(10L);
+        Member inviter = member(1L, "owner@example.com", "owner");
+        Member invitee = member(2L, "invitee@example.com", "invitee");
+        ProjectMember owner = projectMember(inviter, project, ProjectMemberRole.OWNER);
+        givenLockedProjectAndRequester(project, owner);
+        given(memberRepository.findByEmail("invitee@example.com")).willReturn(Optional.of(invitee));
+        given(projectMemberRepository.existsByMemberIdAndProjectIdAndStatus(
+                2L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(false);
+        given(invitationRepository.findAllByProjectIdAndInviteeIdAndStatus(
+                10L,
+                2L,
+                InvitationStatus.INVITED
+        )).willReturn(List.of());
+        willThrow(new CustomException(ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED))
+                .given(projectMemberCapacityValidator)
+                .validateSeatAvailable(10L, CURRENT_TIME);
+
+        assertError(
+                () -> invitationService.create(1L, 10L, request()),
+                ErrorCode.PROJECT_MEMBER_LIMIT_EXCEEDED
+        );
+
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
     void accept_success_newProjectMember() {
         Project project = project(10L);
         Member inviter = member(1L, "owner@example.com", "owner");
@@ -549,8 +603,7 @@ class InvitationServiceTest {
                 invitee,
                 LocalDateTime.of(2026, 8, 22, 10, 0)
         );
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
                 .willReturn(Optional.empty());
 
@@ -569,6 +622,12 @@ class InvitationServiceTest {
         assertThat(response.getInvitationId()).isEqualTo(100L);
         assertThat(response.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
         assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        verifyNoInteractions(projectMemberCapacityValidator);
+
+        InOrder order = inOrder(invitationRepository, projectRepository);
+        order.verify(invitationRepository).findProjectIdById(100L);
+        order.verify(projectRepository).findByIdAndDeletedAtIsNullForUpdate(10L);
+        order.verify(invitationRepository).findByIdForUpdate(100L);
     }
 
     @Test
@@ -593,8 +652,7 @@ class InvitationServiceTest {
         leftProjectMember.changeWorkRole("기획");
         leftProjectMember.leave();
         invitee.updateProfile(null, null, "개발", null, null);
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
                 .willReturn(Optional.of(leftProjectMember));
 
@@ -610,7 +668,7 @@ class InvitationServiceTest {
 
     @Test
     void accept_invitationNotFound() {
-        given(invitationRepository.findByIdForUpdate(100L)).willReturn(Optional.empty());
+        given(invitationRepository.findProjectIdById(100L)).willReturn(Optional.empty());
 
         assertError(
                 () -> invitationService.accept(2L, 100L),
@@ -623,8 +681,7 @@ class InvitationServiceTest {
     @Test
     void accept_accessDenied() {
         Invitation invitation = invitationForAccept();
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
 
         assertError(
                 () -> invitationService.accept(3L, 100L),
@@ -644,8 +701,7 @@ class InvitationServiceTest {
                 member(2L, "invitee@example.com", "invitee"),
                 LocalDateTime.of(2026, 8, 16, 9, 59)
         );
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
 
         assertError(
                 () -> invitationService.accept(2L, 100L),
@@ -664,8 +720,7 @@ class InvitationServiceTest {
     void accept_alreadyProcessed(InvitationStatus status) {
         Invitation invitation = invitationForAccept();
         ReflectionTestUtils.setField(invitation, "status", status);
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
 
         assertError(
                 () -> invitationService.accept(2L, 100L),
@@ -680,8 +735,9 @@ class InvitationServiceTest {
     void accept_deletedProject() {
         Invitation invitation = invitationForAccept();
         invitation.getProject().softDelete(LocalDateTime.of(2026, 8, 22, 11, 0));
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        given(invitationRepository.findProjectIdById(100L)).willReturn(Optional.of(10L));
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.empty());
 
         assertError(
                 () -> invitationService.accept(2L, 100L),
@@ -696,8 +752,7 @@ class InvitationServiceTest {
     void accept_completedProject() {
         Invitation invitation = invitationForAccept();
         invitation.getProject().complete(LocalDateTime.of(2026, 8, 22, 11, 0));
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
 
         assertError(
                 () -> invitationService.accept(2L, 100L),
@@ -717,8 +772,7 @@ class InvitationServiceTest {
                 ProjectMemberRole.MEMBER,
                 LocalDateTime.of(2026, 8, 1, 10, 0)
         );
-        given(invitationRepository.findByIdForUpdate(100L))
-                .willReturn(Optional.of(invitation));
+        givenInvitationForAcceptWithProjectLock(invitation);
         given(projectMemberRepository.findByMemberIdAndProjectId(2L, 10L))
                 .willReturn(Optional.of(joinedProjectMember));
 
@@ -1032,8 +1086,31 @@ class InvitationServiceTest {
         );
     }
 
+    private void givenInvitationForAcceptWithProjectLock(Invitation invitation) {
+        Long projectId = invitation.getProject().getId();
+        given(invitationRepository.findProjectIdById(invitation.getId()))
+                .willReturn(Optional.of(projectId));
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(projectId))
+                .willReturn(Optional.of(invitation.getProject()));
+        given(invitationRepository.findByIdForUpdate(invitation.getId()))
+                .willReturn(Optional.of(invitation));
+    }
+
     private void givenProjectAndRequester(Project project, ProjectMember projectMember) {
         given(projectRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(project));
+        given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
+                1L,
+                10L,
+                ProjectMemberStatus.JOINED
+        )).willReturn(Optional.of(projectMember));
+    }
+
+    private void givenLockedProjectAndRequester(
+            Project project,
+            ProjectMember projectMember
+    ) {
+        given(projectRepository.findByIdAndDeletedAtIsNullForUpdate(10L))
+                .willReturn(Optional.of(project));
         given(projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                 1L,
                 10L,
