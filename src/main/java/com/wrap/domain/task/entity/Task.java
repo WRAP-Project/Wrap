@@ -77,6 +77,46 @@ public class Task {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public static Task create(
+            Project project,
+            Milestone milestone,
+            ProjectMember assignee,
+            String title,
+            String description,
+            LocalDate dueDate,
+            TaskPriority priority,
+            boolean deliverable
+    ) {
+        Task task = new Task();
+        task.project = project;
+        task.milestone = milestone;
+        task.assignee = assignee;
+        task.title = title;
+        task.description = description;
+        task.dueDate = dueDate;
+        task.priority = priority == null ? TaskPriority.MEDIUM : priority;
+        task.deliverable = deliverable;
+        return task;
+    }
+
+    public void update(
+            Milestone milestone,
+            ProjectMember assignee,
+            String title,
+            String description,
+            LocalDate dueDate,
+            TaskPriority priority,
+            boolean deliverable
+    ) {
+        this.milestone = milestone;
+        this.assignee = assignee;
+        this.title = title;
+        this.description = description;
+        this.dueDate = dueDate;
+        this.priority = priority == null ? TaskPriority.MEDIUM : priority;
+        this.deliverable = deliverable;
+    }
+
     public void updateStatus(TaskStatus status) {
         if (status == null) {
             throw new IllegalArgumentException("할 일 상태는 필수입니다.");
