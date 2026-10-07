@@ -1,7 +1,9 @@
 package com.wrap.domain.task.controller;
 
+import com.wrap.domain.task.dto.TaskCreateRequest;
 import com.wrap.domain.task.dto.TaskResponse;
 import com.wrap.domain.task.dto.TaskStatusUpdateRequest;
+import com.wrap.domain.task.dto.TaskUpdateRequest;
 import com.wrap.domain.task.enums.TaskStatus;
 import com.wrap.domain.task.service.TaskService;
 import com.wrap.global.common.ApiResponse;
@@ -11,13 +13,16 @@ import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -51,6 +56,32 @@ public class TaskController {
                         sort
                 ),
                 "Tasks retrieved."
+        );
+    }
+
+    @PostMapping("/projects/{projectId}/tasks")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<TaskResponse> create(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId,
+            @Valid @RequestBody TaskCreateRequest request
+    ) {
+        return ApiResponse.success(
+                taskService.create(memberDetails.getMemberId(), projectId, request),
+                "Task created."
+        );
+    }
+
+    @PatchMapping("/projects/{projectId}/tasks/{taskId}")
+    public ApiResponse<TaskResponse> update(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @Valid @RequestBody TaskUpdateRequest request
+    ) {
+        return ApiResponse.success(
+                taskService.update(memberDetails.getMemberId(), projectId, taskId, request),
+                "Task updated."
         );
     }
 

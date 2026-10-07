@@ -1,9 +1,14 @@
 package com.wrap.domain.task.service;
 
+import com.wrap.domain.milestone.entity.Milestone;
+import com.wrap.domain.milestone.repository.MilestoneRepository;
+import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
+import com.wrap.domain.task.dto.TaskCreateRequest;
 import com.wrap.domain.task.dto.TaskResponse;
 import com.wrap.domain.task.dto.TaskStatusUpdateRequest;
+import com.wrap.domain.task.dto.TaskUpdateRequest;
 import com.wrap.domain.task.entity.Task;
 import com.wrap.domain.task.enums.TaskStatus;
 import com.wrap.domain.task.repository.TaskRepository;
@@ -22,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TaskService {
 
     private final TaskRepository taskRepository;
+    private final MilestoneRepository milestoneRepository;
     private final ProjectMemberValidator projectMemberValidator;
 
     public List<TaskResponse> findTasks(
@@ -54,6 +60,52 @@ public class TaskService {
     }
 
     @Transactional
+    public TaskResponse create(Long memberId, Long projectId, TaskCreateRequest request) {
+        Project project = projectMemberValidator.findJoinedMember(memberId, projectId).getProject();
+
+        Task task = Task.create(
+                project,
+                findMilestone(projectId, request.milestoneId()),
+                findAssignee(projectId, request.assigneeId()),
+                request.title(),
+                request.description(),
+                request.dueDate(),
+                request.priority(),
+                Boolean.TRUE.equals(request.deliverable())
+        );
+
+        return TaskResponse.from(taskRepository.save(task));
+    }
+
+    @Transactional
+    public TaskResponse update(
+            Long memberId,
+            Long projectId,
+            Long taskId,
+            TaskUpdateRequest request
+    ) {
+        ProjectMember requester = projectMemberValidator.findJoinedMember(memberId, projectId);
+        Task task = findProjectTask(projectId, taskId);
+        validateWritable(requester, task);
+
+        task.update(
+                request.milestoneId() == null
+                        ? task.getMilestone()
+                        : findMilestone(projectId, request.milestoneId()),
+                request.assigneeId() == null
+                        ? task.getAssignee()
+                        : findAssignee(projectId, request.assigneeId()),
+                request.title() == null ? task.getTitle() : request.title(),
+                request.description() == null ? task.getDescription() : request.description(),
+                request.dueDate() == null ? task.getDueDate() : request.dueDate(),
+                request.priority() == null ? task.getPriority() : request.priority(),
+                request.deliverable() == null ? task.isDeliverable() : request.deliverable()
+        );
+
+        return TaskResponse.from(task);
+    }
+
+    @Transactional
     public TaskResponse updateStatus(
             Long memberId,
             Long projectId,
@@ -70,10 +122,7 @@ public class TaskService {
     public void delete(Long memberId, Long projectId, Long taskId) {
         ProjectMember requester = projectMemberValidator.findJoinedMember(memberId, projectId);
         Task task = findProjectTask(projectId, taskId);
-
-        if (!requester.isOwner() && !task.isAssignedTo(requester.getId())) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
-        }
+        validateWritable(requester, task);
 
         taskRepository.delete(task);
     }
@@ -81,6 +130,29 @@ public class TaskService {
     private Task findProjectTask(Long projectId, Long taskId) {
         return taskRepository.findByIdAndProjectIdWithAssignee(taskId, projectId)
                 .orElseThrow(() -> new CustomException(ErrorCode.TASK_NOT_FOUND));
+    }
+
+    private void validateWritable(ProjectMember requester, Task task) {
+        if (!requester.isOwner() && !task.isAssignedTo(requester.getId())) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private Milestone findMilestone(Long projectId, Long milestoneId) {
+        if (milestoneId == null) {
+            return null;
+        }
+
+        return milestoneRepository.findByIdAndProjectId(milestoneId, projectId)
+                .orElseThrow(() -> new CustomException(ErrorCode.MILESTONE_NOT_FOUND));
+    }
+
+    private ProjectMember findAssignee(Long projectId, Long assigneeId) {
+        if (assigneeId == null) {
+            return null;
+        }
+
+        return projectMemberValidator.findJoinedProjectMember(projectId, assigneeId);
     }
 
     private void validateDateRange(LocalDate dueFrom, LocalDate dueTo) {

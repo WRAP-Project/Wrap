@@ -1,12 +1,16 @@
 package com.wrap.domain.task.service;
 
 import com.wrap.domain.member.entity.Member;
+import com.wrap.domain.milestone.entity.Milestone;
+import com.wrap.domain.milestone.repository.MilestoneRepository;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.entity.ProjectMember;
 import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.service.ProjectMemberValidator;
+import com.wrap.domain.task.dto.TaskCreateRequest;
 import com.wrap.domain.task.dto.TaskResponse;
 import com.wrap.domain.task.dto.TaskStatusUpdateRequest;
+import com.wrap.domain.task.dto.TaskUpdateRequest;
 import com.wrap.domain.task.entity.Task;
 import com.wrap.domain.task.enums.TaskPriority;
 import com.wrap.domain.task.enums.TaskStatus;
@@ -24,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,14 +36,16 @@ import static org.mockito.Mockito.when;
 class TaskServiceTest {
 
     private TaskRepository taskRepository;
+    private MilestoneRepository milestoneRepository;
     private ProjectMemberValidator projectMemberValidator;
     private TaskService taskService;
 
     @BeforeEach
     void setUp() {
         taskRepository = mock(TaskRepository.class);
+        milestoneRepository = mock(MilestoneRepository.class);
         projectMemberValidator = mock(ProjectMemberValidator.class);
-        taskService = new TaskService(taskRepository, projectMemberValidator);
+        taskService = new TaskService(taskRepository, milestoneRepository, projectMemberValidator);
     }
 
     @Test
@@ -73,6 +80,126 @@ class TaskServiceTest {
         assertThat(responses.get(0).id()).isEqualTo(1L);
         assertThat(responses.get(0).assignee().projectMemberId()).isEqualTo(100L);
         verify(projectMemberValidator).findJoinedMember(1L, 10L);
+    }
+
+    @Test
+    void createInitializesTodoStatusAndZeroProgress() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(100L, 1L, project, ProjectMemberRole.MEMBER);
+        Milestone milestone = milestone(20L, project);
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(requester);
+        when(milestoneRepository.findByIdAndProjectId(20L, 10L)).thenReturn(Optional.of(milestone));
+        when(projectMemberValidator.findJoinedProjectMember(10L, 100L)).thenReturn(requester);
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TaskResponse response = taskService.create(1L, 10L, new TaskCreateRequest(
+                "최종 PDF 및 원본 업로드",
+                20L,
+                "마감 전 최종 확인 필요",
+                LocalDate.of(2026, 7, 30),
+                100L,
+                TaskPriority.HIGH,
+                true
+        ));
+
+        assertThat(response.status()).isEqualTo(TaskStatus.TODO);
+        assertThat(response.progress()).isZero();
+        assertThat(response.milestoneId()).isEqualTo(20L);
+        assertThat(response.assignee().projectMemberId()).isEqualTo(100L);
+        assertThat(response.priority()).isEqualTo(TaskPriority.HIGH);
+        assertThat(response.deliverable()).isTrue();
+    }
+
+    @Test
+    void createAppliesDefaultsWhenOptionalFieldsOmitted() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(100L, 1L, project, ProjectMemberRole.MEMBER);
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(requester);
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TaskResponse response = taskService.create(1L, 10L, new TaskCreateRequest(
+                "마일스톤 없는 일정",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.milestoneId()).isNull();
+        assertThat(response.assignee()).isNull();
+        assertThat(response.priority()).isEqualTo(TaskPriority.MEDIUM);
+        assertThat(response.deliverable()).isFalse();
+    }
+
+    @Test
+    void createRejectsMilestoneFromAnotherProject() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(100L, 1L, project, ProjectMemberRole.MEMBER);
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(requester);
+        when(milestoneRepository.findByIdAndProjectId(99L, 10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.create(1L, 10L, new TaskCreateRequest(
+                "다른 프로젝트 마일스톤",
+                99L,
+                null,
+                null,
+                null,
+                null,
+                null
+        )))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(ErrorCode.MILESTONE_NOT_FOUND));
+    }
+
+    @Test
+    void updateChangesOnlyProvidedFields() {
+        Project project = project(10L);
+        ProjectMember assignee = projectMember(100L, 1L, project, ProjectMemberRole.MEMBER);
+        Task task = task(1L, project, assignee, TaskStatus.IN_PROGRESS, LocalDate.of(2026, 9, 30));
+        when(projectMemberValidator.findJoinedMember(1L, 10L)).thenReturn(assignee);
+        when(taskRepository.findByIdAndProjectIdWithAssignee(1L, 10L)).thenReturn(Optional.of(task));
+
+        TaskResponse response = taskService.update(1L, 10L, 1L, new TaskUpdateRequest(
+                "제목만 수정",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.title()).isEqualTo("제목만 수정");
+        assertThat(response.description()).isEqualTo("Task description");
+        assertThat(response.dueDate()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(response.status()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(response.assignee().projectMemberId()).isEqualTo(100L);
+    }
+
+    @Test
+    void updateRejectsUnrelatedMember() {
+        Project project = project(10L);
+        ProjectMember requester = projectMember(200L, 2L, project, ProjectMemberRole.MEMBER);
+        ProjectMember assignee = projectMember(100L, 1L, project, ProjectMemberRole.MEMBER);
+        Task task = task(1L, project, assignee, TaskStatus.TODO, LocalDate.of(2026, 9, 30));
+        when(projectMemberValidator.findJoinedMember(2L, 10L)).thenReturn(requester);
+        when(taskRepository.findByIdAndProjectIdWithAssignee(1L, 10L)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> taskService.update(2L, 10L, 1L, new TaskUpdateRequest(
+                "권한 없는 수정",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        )))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(ErrorCode.FORBIDDEN));
     }
 
     @Test
@@ -146,6 +273,12 @@ class TaskServiceTest {
         ProjectMember projectMember = ProjectMember.join(member, project, role, LocalDateTime.now());
         ReflectionTestUtils.setField(projectMember, "id", id);
         return projectMember;
+    }
+
+    private Milestone milestone(Long id, Project project) {
+        Milestone milestone = Milestone.create(project, "중간 발표 자료 제출", null, LocalDate.of(2026, 7, 30));
+        ReflectionTestUtils.setField(milestone, "id", id);
+        return milestone;
     }
 
     private Task task(

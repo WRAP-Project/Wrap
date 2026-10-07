@@ -84,6 +84,59 @@ class TaskControllerTest {
     }
 
     @Test
+    void updateWithBlankTitleReturnsBadRequest() throws Exception {
+        mockMvc.perform(patch("/projects/10/tasks/2")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "   "
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details[0].field").value("title"));
+
+        verifyNoInteractions(taskService);
+    }
+
+    @Test
+    void updateWithoutTitleKeepsExistingTitle() throws Exception {
+        when(taskService.update(eq(1L), eq(10L), eq(2L), any()))
+                .thenReturn(new TaskResponse(
+                        2L,
+                        10L,
+                        null,
+                        null,
+                        "Task",
+                        null,
+                        TaskStatus.TODO,
+                        null,
+                        0,
+                        TaskPriority.MEDIUM,
+                        false
+                ));
+
+        mockMvc.perform(patch("/projects/10/tasks/2")
+                        .with(user(memberDetails(1L)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "updated"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value("Task"))
+                .andExpect(jsonPath("$.message").value("Task updated."));
+
+        verify(taskService).update(eq(1L), eq(10L), eq(2L), any());
+    }
+
+    @Test
     void updateStatusReturnsUpdatedTask() throws Exception {
         when(taskService.updateStatus(eq(1L), eq(10L), eq(2L), any()))
                 .thenReturn(new TaskResponse(
