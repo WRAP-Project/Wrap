@@ -6,8 +6,8 @@ import com.wrap.domain.chat.entity.ChatMessage;
 import com.wrap.domain.chat.entity.ChatReadState;
 import com.wrap.domain.chat.entity.ChatRoom;
 import com.wrap.domain.chat.entity.ChatRoomMember;
-import com.wrap.domain.chat.exception.ChatErrorCode;
-import com.wrap.domain.chat.exception.ChatException;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.domain.chat.repository.ChatMessageRepository;
 import com.wrap.domain.chat.repository.ChatReadStateRepository;
 import com.wrap.domain.chat.repository.ChatRoomMemberRepository;
@@ -35,19 +35,19 @@ public class ChatReadService {
             ChatReadRequest request
     ) {
         ChatRoom chatRoom = chatRoomRepository.findByIdAndDeletedAtIsNull(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
         ChatRoomMember chatRoomMember = chatRoomMemberRepository
                 .findByChatRoomIdAndProjectMemberMemberIdAndProjectMemberStatus(
                         chatRoomId,
                         memberId,
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(
-                        ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED
+                .orElseThrow(() -> new CustomException(
+                        ErrorCode.CHAT_ROOM_MEMBER_REQUIRED
                 ));
         ChatMessage lastReadMessage = chatMessageRepository
                 .findByIdAndChatRoomId(request.lastReadMessageId(), chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.MESSAGE_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.MESSAGE_NOT_FOUND));
         Long projectMemberId = chatRoomMember.getProjectMember().getId();
         ChatReadState readState = chatReadStateRepository
                 .findForUpdate(chatRoomId, projectMemberId)
@@ -57,7 +57,7 @@ public class ChatReadService {
                 ));
         if (readState.getLastReadMessage() != null
                 && readState.getLastReadMessage().getId() > lastReadMessage.getId()) {
-            throw new ChatException(ChatErrorCode.READ_POSITION_CANNOT_MOVE_BACKWARD);
+            throw new CustomException(ErrorCode.READ_POSITION_CANNOT_MOVE_BACKWARD);
         }
 
         readState.updateLastRead(lastReadMessage, LocalDateTime.now());

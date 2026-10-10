@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,6 +15,7 @@ import com.wrap.domain.chat.repository.ChatRoomRepository;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.schedule.entity.Schedule;
 import jakarta.persistence.EntityManager;
@@ -31,8 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class ChatRoomApiTest {
-
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     @Autowired
     private MockMvc mockMvc;
@@ -71,7 +72,7 @@ class ChatRoomApiTest {
                 """.formatted(participant.getId());
 
         mockMvc.perform(post("/projects/{projectId}/chat-rooms", project.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
@@ -108,18 +109,18 @@ class ChatRoomApiTest {
                 """.formatted(schedule.getId());
 
         mockMvc.perform(post("/projects/{projectId}/chat-rooms", project.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/projects/{projectId}/chat-rooms", project.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code")
+                .andExpect(jsonPath("$.error.code")
                         .value("CHAT_ROOM_SCHEDULE_ALREADY_LINKED"));
     }
 
@@ -140,11 +141,11 @@ class ChatRoomApiTest {
                 """.formatted(schedule.getId());
 
         mockMvc.perform(post("/projects/{projectId}/chat-rooms", project.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("SCHEDULE_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("SCHEDULE_NOT_FOUND"));
     }
 
     @Test
@@ -168,12 +169,12 @@ class ChatRoomApiTest {
                 """.formatted(invitedProjectMember.getId());
 
         mockMvc.perform(post("/projects/{projectId}/chat-rooms", project.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("INVALID_PROJECT_MEMBER"));
+                .andExpect(jsonPath("$.error.code").value("INVALID_PROJECT_MEMBER"));
     }
 
     @Test
@@ -201,7 +202,7 @@ class ChatRoomApiTest {
         chatRoomRepository.saveAllAndFlush(java.util.List.of(closedRoom, otherRoom));
 
         mockMvc.perform(get("/chat-rooms")
-                        .header(MEMBER_ID_HEADER, member.getId())
+                        .with(authenticatedAs(member.getId()))
                         .param("status", "CLOSED")
                         .param("projectId", project.getId().toString())
                         .param("query", "종료"))
@@ -214,7 +215,7 @@ class ChatRoomApiTest {
                 .andExpect(jsonPath("$.data.hasNext").value(false));
 
         mockMvc.perform(get("/chat-rooms")
-                        .header(MEMBER_ID_HEADER, member.getId())
+                        .with(authenticatedAs(member.getId()))
                         .param("size", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
@@ -224,7 +225,7 @@ class ChatRoomApiTest {
                 .andExpect(jsonPath("$.data.nextCursor").value(latestOpenRoom.getId()));
 
         mockMvc.perform(get("/chat-rooms")
-                        .header(MEMBER_ID_HEADER, member.getId())
+                        .with(authenticatedAs(member.getId()))
                         .param("cursor", latestOpenRoom.getId().toString())
                         .param("size", "1"))
                 .andExpect(status().isOk())
@@ -249,10 +250,10 @@ class ChatRoomApiTest {
         ChatRoom chatRoom = createRoom(project, creator, "참여자 전용 채팅");
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, outsiderMember.getId()))
+                        .with(authenticatedAs(outsiderMember.getId())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
     }
 
     private ChatRoom createRoom(
@@ -291,6 +292,7 @@ class ChatRoomApiTest {
         ProjectMember projectMember = instantiate(ProjectMember.class);
         ReflectionTestUtils.setField(projectMember, "project", project);
         ReflectionTestUtils.setField(projectMember, "member", member);
+        ReflectionTestUtils.setField(projectMember, "role", ProjectMemberRole.MEMBER);
         ReflectionTestUtils.setField(projectMember, "status", status);
         entityManager.persist(projectMember);
         return projectMember;

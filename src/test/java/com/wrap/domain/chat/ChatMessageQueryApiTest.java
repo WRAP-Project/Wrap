@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,8 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class ChatMessageQueryApiTest {
 
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
-
     @Autowired
     private MockMvc mockMvc;
 
@@ -56,7 +56,7 @@ class ChatMessageQueryApiTest {
         List<ChatMessage> messages = createMessages(context, 5);
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("size", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(3))
@@ -70,7 +70,7 @@ class ChatMessageQueryApiTest {
                 .andExpect(jsonPath("$.data.hasNext").value(true));
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("cursor", messages.get(2).getId().toString())
                         .param("size", "2"))
                 .andExpect(status().isOk())
@@ -89,7 +89,7 @@ class ChatMessageQueryApiTest {
         List<ChatMessage> messages = createMessages(context, 5);
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("afterMessageId", messages.get(1).getId().toString())
                         .param("size", "2"))
                 .andExpect(status().isOk())
@@ -102,7 +102,7 @@ class ChatMessageQueryApiTest {
                 .andExpect(jsonPath("$.data.hasNext").value(true));
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("afterMessageId", messages.get(3).getId().toString())
                         .param("size", "2"))
                 .andExpect(status().isOk())
@@ -112,7 +112,7 @@ class ChatMessageQueryApiTest {
                 .andExpect(jsonPath("$.data.hasNext").value(false));
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("afterMessageId", messages.get(4).getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(0))
@@ -125,11 +125,11 @@ class ChatMessageQueryApiTest {
         ChatMessage message = createMessages(context, 1).getFirst();
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .param("cursor", message.getId().toString())
                         .param("afterMessageId", message.getId().toString()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_MESSAGE_QUERY"));
+                .andExpect(jsonPath("$.error.code").value("INVALID_MESSAGE_QUERY"));
     }
 
     @Test
@@ -145,7 +145,7 @@ class ChatMessageQueryApiTest {
         chatRoomRepository.saveAndFlush(context.chatRoom());
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId()))
+                        .with(authenticatedAs(context.member().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[1].deleted").value(true))
@@ -166,9 +166,9 @@ class ChatMessageQueryApiTest {
         flush();
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, ownerMember.getId()))
+                        .with(authenticatedAs(ownerMember.getId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
     }
 
     private ChatContext createContext(String uniqueName) {

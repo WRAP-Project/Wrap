@@ -18,6 +18,7 @@ import com.wrap.domain.chat.repository.ChatRoomRepository;
 import com.wrap.domain.member.entity.Member;
 import com.wrap.domain.project.entity.Project;
 import com.wrap.domain.projectmember.entity.ProjectMember;
+import com.wrap.domain.projectmember.enums.ProjectMemberRole;
 import com.wrap.domain.projectmember.enums.ProjectMemberStatus;
 import com.wrap.domain.schedule.entity.Schedule;
 import jakarta.persistence.EntityManager;
@@ -175,6 +176,7 @@ class ChatPersistenceTest {
         ProjectMember projectMember = instantiate(ProjectMember.class);
         ReflectionTestUtils.setField(projectMember, "project", project);
         ReflectionTestUtils.setField(projectMember, "member", member);
+        ReflectionTestUtils.setField(projectMember, "role", ProjectMemberRole.MEMBER);
         ReflectionTestUtils.setField(projectMember, "status", ProjectMemberStatus.JOINED);
         entityManager.persist(projectMember);
         entityManager.flush();

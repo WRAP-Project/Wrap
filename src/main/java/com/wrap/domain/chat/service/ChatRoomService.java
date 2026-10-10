@@ -12,8 +12,8 @@ import com.wrap.domain.chat.entity.ChatMessage;
 import com.wrap.domain.chat.entity.ChatRoom;
 import com.wrap.domain.chat.entity.ChatRoomMember;
 import com.wrap.domain.chat.enums.ChatRoomStatus;
-import com.wrap.domain.chat.exception.ChatErrorCode;
-import com.wrap.domain.chat.exception.ChatException;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.domain.chat.repository.ChatReadStateRepository;
 import com.wrap.domain.chat.repository.ChatMessageRepository;
 import com.wrap.domain.chat.repository.ChatRoomMemberRepository;
@@ -59,7 +59,7 @@ public class ChatRoomService {
             ChatRoomCreateRequest request
     ) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.PROJECT_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.PROJECT_NOT_FOUND));
         ProjectMember creator = findJoinedProjectMember(memberId, projectId);
         Schedule schedule = findSchedule(projectId, request.scheduleId());
         validateScheduleIsAvailable(schedule);
@@ -76,7 +76,7 @@ public class ChatRoomService {
             );
         } catch (DataIntegrityViolationException exception) {
             if (schedule != null) {
-                throw new ChatException(ChatErrorCode.CHAT_ROOM_SCHEDULE_ALREADY_LINKED);
+                throw new CustomException(ErrorCode.CHAT_ROOM_SCHEDULE_ALREADY_LINKED);
             }
             throw exception;
         }
@@ -130,7 +130,7 @@ public class ChatRoomService {
     public ChatRoomDetailResponse getChatRoom(Long memberId, Long chatRoomId) {
         ChatRoom chatRoom = findActiveChatRoom(chatRoomId);
         if (findJoinedChatRoomMember(chatRoomId, memberId).isEmpty()) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_MEMBER_REQUIRED);
         }
         return toDetailResponse(
                 chatRoom,
@@ -141,7 +141,7 @@ public class ChatRoomService {
     public List<ChatMemberResponse> getMembers(Long memberId, Long chatRoomId) {
         findActiveChatRoom(chatRoomId);
         if (findJoinedChatRoomMember(chatRoomId, memberId).isEmpty()) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_MEMBER_REQUIRED);
         }
         return chatRoomMemberRepository.findByChatRoomId(chatRoomId).stream()
                 .filter(chatRoomMember -> chatRoomMember.getProjectMember().getStatus()
@@ -162,13 +162,13 @@ public class ChatRoomService {
         ProjectMember currentProjectMember = findCurrentProjectMember(
                 memberId,
                 chatRoom,
-                ChatErrorCode.CHAT_ROOM_UPDATE_FORBIDDEN
+                ErrorCode.CHAT_ROOM_UPDATE_FORBIDDEN
         );
         if (!isCreator(chatRoom, currentProjectMember) && !isOwner(currentProjectMember)) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_UPDATE_FORBIDDEN);
+            throw new CustomException(ErrorCode.CHAT_ROOM_UPDATE_FORBIDDEN);
         }
         if (chatRoom.getStatus() == ChatRoomStatus.CLOSED) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_CLOSED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_CLOSED);
         }
 
         chatRoom.updateName(request.name().trim());
@@ -181,7 +181,7 @@ public class ChatRoomService {
         ProjectMember currentProjectMember = findCurrentProjectMember(
                 memberId,
                 chatRoom,
-                ChatErrorCode.CHAT_ROOM_CLOSE_FORBIDDEN
+                ErrorCode.CHAT_ROOM_CLOSE_FORBIDDEN
         );
         boolean participant = chatRoomMemberRepository
                 .existsByChatRoomIdAndProjectMemberId(
@@ -189,10 +189,10 @@ public class ChatRoomService {
                         currentProjectMember.getId()
                 );
         if (!participant && !isOwner(currentProjectMember)) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_CLOSE_FORBIDDEN);
+            throw new CustomException(ErrorCode.CHAT_ROOM_CLOSE_FORBIDDEN);
         }
         if (chatRoom.getStatus() == ChatRoomStatus.CLOSED) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_ALREADY_CLOSED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_ALREADY_CLOSED);
         }
 
         chatRoom.close(currentProjectMember, LocalDateTime.now());
@@ -205,10 +205,10 @@ public class ChatRoomService {
         ProjectMember currentProjectMember = findCurrentProjectMember(
                 memberId,
                 chatRoom,
-                ChatErrorCode.CHAT_ROOM_DELETE_FORBIDDEN
+                ErrorCode.CHAT_ROOM_DELETE_FORBIDDEN
         );
         if (!isCreator(chatRoom, currentProjectMember) && !isOwner(currentProjectMember)) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_DELETE_FORBIDDEN);
+            throw new CustomException(ErrorCode.CHAT_ROOM_DELETE_FORBIDDEN);
         }
         chatRoom.softDelete(currentProjectMember, LocalDateTime.now());
     }
@@ -219,20 +219,20 @@ public class ChatRoomService {
                         projectId,
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(ChatErrorCode.INVALID_PROJECT_MEMBER));
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_PROJECT_MEMBER));
     }
 
     private ProjectMember findCurrentProjectMember(
             Long memberId,
             ChatRoom chatRoom,
-            ChatErrorCode forbiddenErrorCode
+            ErrorCode forbiddenErrorCode
     ) {
         return projectMemberRepository.findByMemberIdAndProjectIdAndStatus(
                         memberId,
                         chatRoom.getProject().getId(),
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(forbiddenErrorCode));
+                .orElseThrow(() -> new CustomException(forbiddenErrorCode));
     }
 
     private Schedule findSchedule(Long projectId, Long scheduleId) {
@@ -241,12 +241,12 @@ public class ChatRoomService {
         }
         return scheduleRepository.findByIdAndProjectId(scheduleId, projectId)
                 .filter(Schedule::isShared)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.SCHEDULE_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.SCHEDULE_NOT_FOUND));
     }
 
     private void validateScheduleIsAvailable(Schedule schedule) {
         if (schedule != null && chatRoomRepository.existsByScheduleId(schedule.getId())) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_SCHEDULE_ALREADY_LINKED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_SCHEDULE_ALREADY_LINKED);
         }
     }
 
@@ -264,19 +264,19 @@ public class ChatRoomService {
                         ProjectMemberStatus.JOINED
                 );
         if (participants.size() != participantIds.size()) {
-            throw new ChatException(ChatErrorCode.INVALID_PROJECT_MEMBER);
+            throw new CustomException(ErrorCode.INVALID_PROJECT_MEMBER);
         }
         return participants;
     }
 
     private ChatRoom findActiveChatRoom(Long chatRoomId) {
         return chatRoomRepository.findByIdAndDeletedAtIsNull(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
     }
 
     private ChatRoom findActiveChatRoomForUpdate(Long chatRoomId) {
         return chatRoomRepository.findForUpdate(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
     }
 
     private Optional<ChatRoomMember> findJoinedChatRoomMember(

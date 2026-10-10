@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -36,8 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class ChatMessageCommandApiTest {
-
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     @Autowired
     private MockMvc mockMvc;
@@ -90,7 +90,7 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId())
+                        .with(authenticatedAs(context.authorMember().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"  수정된 메시지  \"}"))
                 .andExpect(status().isOk())
@@ -114,20 +114,20 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.otherMember().getId())
+                        .with(authenticatedAs(context.otherMember().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"다른 사람이 수정\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("MESSAGE_AUTHOR_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("MESSAGE_AUTHOR_REQUIRED"));
 
         mockMvc.perform(delete(
                         "/chat-rooms/{chatRoomId}/messages/{messageId}",
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.otherMember().getId()))
+                        .with(authenticatedAs(context.otherMember().getId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("MESSAGE_AUTHOR_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("MESSAGE_AUTHOR_REQUIRED"));
     }
 
     @Test
@@ -137,7 +137,7 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId()))
+                        .with(authenticatedAs(context.authorMember().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -147,7 +147,7 @@ class ChatMessageCommandApiTest {
         assertNotNull(deleted.getDeletedAt());
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/messages", context.chatRoom().getId())
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId()))
+                        .with(authenticatedAs(context.authorMember().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].deleted").value(true))
                 .andExpect(jsonPath("$.data.content[0].content").doesNotExist());
@@ -157,20 +157,20 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId()))
+                        .with(authenticatedAs(context.authorMember().getId())))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("MESSAGE_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("MESSAGE_NOT_FOUND"));
 
         mockMvc.perform(patch(
                         "/chat-rooms/{chatRoomId}/messages/{messageId}",
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId())
+                        .with(authenticatedAs(context.authorMember().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"삭제 후 수정\"}"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("MESSAGE_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("MESSAGE_NOT_FOUND"));
     }
 
     @Test
@@ -186,20 +186,20 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId())
+                        .with(authenticatedAs(context.authorMember().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"종료 후 수정\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_CLOSED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_CLOSED"));
 
         mockMvc.perform(delete(
                         "/chat-rooms/{chatRoomId}/messages/{messageId}",
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId()))
+                        .with(authenticatedAs(context.authorMember().getId())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_CLOSED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_CLOSED"));
     }
 
     @Test
@@ -209,11 +209,11 @@ class ChatMessageCommandApiTest {
                         context.chatRoom().getId(),
                         context.message().getId()
                 )
-                        .header(MEMBER_ID_HEADER, context.authorMember().getId())
+                        .with(authenticatedAs(context.authorMember().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
     }
 
     private Project createProject() {

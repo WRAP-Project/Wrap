@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,8 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class ChatRoomCommandApiTest {
 
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
-
     @Autowired
     private MockMvc mockMvc;
 
@@ -55,7 +55,7 @@ class ChatRoomCommandApiTest {
         ChatRoom chatRoom = createRoom(context, "수정 전", true);
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId())
+                        .with(authenticatedAs(context.member().getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"수정 후\"}"))
                 .andExpect(status().isOk())
@@ -90,14 +90,14 @@ class ChatRoomCommandApiTest {
         chatRoomMemberRepository.saveAndFlush(ChatRoomMember.create(chatRoom, participant));
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, participantMember.getId())
+                        .with(authenticatedAs(participantMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"참여자 수정\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_UPDATE_FORBIDDEN"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_UPDATE_FORBIDDEN"));
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, ownerMember.getId())
+                        .with(authenticatedAs(ownerMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"OWNER 수정\"}"))
                 .andExpect(status().isOk())
@@ -123,7 +123,7 @@ class ChatRoomCommandApiTest {
         ChatRoom chatRoom = createRoom(project, creator, "종료 테스트", true);
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}/close", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, ownerMember.getId()))
+                        .with(authenticatedAs(ownerMember.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CLOSED"))
                 .andExpect(jsonPath("$.data.closedAt").isNotEmpty())
@@ -135,16 +135,16 @@ class ChatRoomCommandApiTest {
         assertNotNull(closed.getClosedAt());
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}/close", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, ownerMember.getId()))
+                        .with(authenticatedAs(ownerMember.getId())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_ALREADY_CLOSED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_ALREADY_CLOSED"));
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId())
+                        .with(authenticatedAs(creatorMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"종료 후 수정\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_CLOSED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_CLOSED"));
     }
 
     @Test
@@ -162,9 +162,9 @@ class ChatRoomCommandApiTest {
         ChatRoom chatRoom = createRoom(project, creator, "종료 권한 테스트", true);
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}/close", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, outsiderMember.getId()))
+                        .with(authenticatedAs(outsiderMember.getId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_CLOSE_FORBIDDEN"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_CLOSE_FORBIDDEN"));
     }
 
     @Test
@@ -187,7 +187,7 @@ class ChatRoomCommandApiTest {
         chatRoomMemberRepository.saveAndFlush(ChatRoomMember.create(chatRoom, participant));
 
         mockMvc.perform(patch("/chat-rooms/{chatRoomId}/close", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, participantMember.getId()))
+                        .with(authenticatedAs(participantMember.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CLOSED"));
 
@@ -203,7 +203,7 @@ class ChatRoomCommandApiTest {
         ChatRoom chatRoom = createRoom(context, "삭제 테스트", true);
 
         mockMvc.perform(delete("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId()))
+                        .with(authenticatedAs(context.member().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -214,9 +214,9 @@ class ChatRoomCommandApiTest {
         assertTrue(chatRoomRepository.findByIdAndDeletedAtIsNull(chatRoom.getId()).isEmpty());
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, context.member().getId()))
+                        .with(authenticatedAs(context.member().getId())))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_NOT_FOUND"));
     }
 
     @Test
@@ -239,9 +239,9 @@ class ChatRoomCommandApiTest {
         chatRoomMemberRepository.saveAndFlush(ChatRoomMember.create(chatRoom, participant));
 
         mockMvc.perform(delete("/chat-rooms/{chatRoomId}", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, participantMember.getId()))
+                        .with(authenticatedAs(participantMember.getId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_DELETE_FORBIDDEN"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_DELETE_FORBIDDEN"));
     }
 
     private ChatContext createContext(String uniqueName, ProjectMemberRole role) {

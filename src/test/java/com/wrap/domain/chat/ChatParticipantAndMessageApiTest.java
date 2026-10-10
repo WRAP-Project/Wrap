@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,8 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class ChatParticipantAndMessageApiTest {
-
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     @Autowired
     private MockMvc mockMvc;
@@ -81,7 +81,7 @@ class ChatParticipantAndMessageApiTest {
         addParticipant(chatRoom, left);
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/members", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, creatorMember.getId()))
+                        .with(authenticatedAs(creatorMember.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.length()").value(2))
@@ -110,9 +110,9 @@ class ChatParticipantAndMessageApiTest {
         addParticipant(chatRoom, creator);
 
         mockMvc.perform(get("/chat-rooms/{chatRoomId}/members", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, ownerMember.getId()))
+                        .with(authenticatedAs(ownerMember.getId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
     }
 
     @Test
@@ -130,7 +130,7 @@ class ChatParticipantAndMessageApiTest {
         addParticipant(chatRoom, sender);
 
         mockMvc.perform(post("/chat-rooms/{chatRoomId}/messages", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, senderMember.getId())
+                        .with(authenticatedAs(senderMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"  첫 메시지  \"}"))
                 .andExpect(status().isCreated())
@@ -169,11 +169,11 @@ class ChatParticipantAndMessageApiTest {
         addParticipant(chatRoom, creator);
 
         mockMvc.perform(post("/chat-rooms/{chatRoomId}/messages", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, outsiderMember.getId())
+                        .with(authenticatedAs(outsiderMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"전송 불가\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
     }
 
     @Test
@@ -191,21 +191,21 @@ class ChatParticipantAndMessageApiTest {
         addParticipant(chatRoom, sender);
 
         mockMvc.perform(post("/chat-rooms/{chatRoomId}/messages", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, senderMember.getId())
+                        .with(authenticatedAs(senderMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
 
         chatRoom.close(sender, LocalDateTime.of(2026, 10, 10, 14, 0));
         chatRoomRepository.saveAndFlush(chatRoom);
 
         mockMvc.perform(post("/chat-rooms/{chatRoomId}/messages", chatRoom.getId())
-                        .header(MEMBER_ID_HEADER, senderMember.getId())
+                        .with(authenticatedAs(senderMember.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"종료 후 메시지\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_CLOSED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_CLOSED"));
     }
 
     private ChatRoom createRoom(Project project, ProjectMember creator) {

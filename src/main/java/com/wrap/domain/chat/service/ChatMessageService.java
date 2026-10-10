@@ -8,8 +8,8 @@ import com.wrap.domain.chat.entity.ChatMessage;
 import com.wrap.domain.chat.entity.ChatRoom;
 import com.wrap.domain.chat.entity.ChatRoomMember;
 import com.wrap.domain.chat.enums.ChatRoomStatus;
-import com.wrap.domain.chat.exception.ChatErrorCode;
-import com.wrap.domain.chat.exception.ChatException;
+import com.wrap.global.exception.CustomException;
+import com.wrap.global.exception.ErrorCode;
 import com.wrap.domain.chat.repository.ChatMessageRepository;
 import com.wrap.domain.chat.repository.ChatRoomMemberRepository;
 import com.wrap.domain.chat.repository.ChatRoomRepository;
@@ -39,18 +39,18 @@ public class ChatMessageService {
             ChatMessageCreateRequest request
     ) {
         ChatRoom chatRoom = chatRoomRepository.findForUpdate(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
         ChatRoomMember sender = chatRoomMemberRepository
                 .findByChatRoomIdAndProjectMemberMemberIdAndProjectMemberStatus(
                         chatRoomId,
                         memberId,
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(
-                        ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED
+                .orElseThrow(() -> new CustomException(
+                        ErrorCode.CHAT_ROOM_MEMBER_REQUIRED
                 ));
         if (chatRoom.getStatus() == ChatRoomStatus.CLOSED) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_CLOSED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_CLOSED);
         }
 
         ChatMessage message = chatMessageRepository.saveAndFlush(
@@ -71,18 +71,18 @@ public class ChatMessageService {
             int size
     ) {
         chatRoomRepository.findByIdAndDeletedAtIsNull(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
         ChatRoomMember currentChatRoomMember = chatRoomMemberRepository
                 .findByChatRoomIdAndProjectMemberMemberIdAndProjectMemberStatus(
                         chatRoomId,
                         memberId,
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(
-                        ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED
+                .orElseThrow(() -> new CustomException(
+                        ErrorCode.CHAT_ROOM_MEMBER_REQUIRED
                 ));
         if (cursor != null && afterMessageId != null) {
-            throw new ChatException(ChatErrorCode.INVALID_MESSAGE_QUERY);
+            throw new CustomException(ErrorCode.INVALID_MESSAGE_QUERY);
         }
 
         MessageSlice messageSlice = loadMessages(
@@ -142,26 +142,26 @@ public class ChatMessageService {
             Long messageId
     ) {
         ChatRoom chatRoom = chatRoomRepository.findForUpdate(chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND));
         ChatRoomMember currentChatRoomMember = chatRoomMemberRepository
                 .findByChatRoomIdAndProjectMemberMemberIdAndProjectMemberStatus(
                         chatRoomId,
                         memberId,
                         ProjectMemberStatus.JOINED
                 )
-                .orElseThrow(() -> new ChatException(
-                        ChatErrorCode.CHAT_ROOM_MEMBER_REQUIRED
+                .orElseThrow(() -> new CustomException(
+                        ErrorCode.CHAT_ROOM_MEMBER_REQUIRED
                 ));
         if (chatRoom.getStatus() == ChatRoomStatus.CLOSED) {
-            throw new ChatException(ChatErrorCode.CHAT_ROOM_CLOSED);
+            throw new CustomException(ErrorCode.CHAT_ROOM_CLOSED);
         }
         ChatMessage message = chatMessageRepository
                 .findByIdAndChatRoomIdAndDeletedAtIsNull(messageId, chatRoomId)
-                .orElseThrow(() -> new ChatException(ChatErrorCode.MESSAGE_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.MESSAGE_NOT_FOUND));
         if (!message.getSender().getId().equals(
                 currentChatRoomMember.getProjectMember().getId()
         )) {
-            throw new ChatException(ChatErrorCode.MESSAGE_AUTHOR_REQUIRED);
+            throw new CustomException(ErrorCode.MESSAGE_AUTHOR_REQUIRED);
         }
         return new MessageWriteContext(currentChatRoomMember, message);
     }

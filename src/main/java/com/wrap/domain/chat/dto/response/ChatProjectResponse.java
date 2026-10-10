@@ -4,10 +4,11 @@ import com.wrap.domain.project.entity.Project;
 
 public record ChatProjectResponse(
         Long projectId,
-        String name
+        String name,
+        String color
 ) {
 
     public static ChatProjectResponse from(Project project) {
-        return new ChatProjectResponse(project.getId(), project.getName());
+        return new ChatProjectResponse(project.getId(), project.getName(), project.getColor());
     }
 }

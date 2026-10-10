@@ -1,5 +1,7 @@
 package com.wrap.domain.chat;
 
+import static com.wrap.domain.chat.ChatTestSecurity.authenticatedAs;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -38,8 +40,6 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class ChatReadApiTest {
-
-    private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     @Autowired
     private MockMvc mockMvc;
@@ -128,7 +128,7 @@ class ChatReadApiTest {
 
         updateRead(context.readerMember(), context.chatRoom(), otherRoomMessage)
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("MESSAGE_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("MESSAGE_NOT_FOUND"));
     }
 
     @Test
@@ -141,7 +141,7 @@ class ChatReadApiTest {
 
         updateRead(context.readerMember(), context.chatRoom(), first)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code")
+                .andExpect(jsonPath("$.error.code")
                         .value("READ_POSITION_CANNOT_MOVE_BACKWARD"));
     }
 
@@ -174,7 +174,7 @@ class ChatReadApiTest {
 
         updateRead(outsiderMember, context.chatRoom(), message)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
+                .andExpect(jsonPath("$.error.code").value("CHAT_ROOM_MEMBER_REQUIRED"));
     }
 
     private org.springframework.test.web.servlet.ResultActions updateRead(
@@ -183,14 +183,14 @@ class ChatReadApiTest {
             ChatMessage message
     ) throws Exception {
         return mockMvc.perform(put("/chat-rooms/{chatRoomId}/read", chatRoom.getId())
-                .header(MEMBER_ID_HEADER, member.getId())
+                .with(authenticatedAs(member.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"lastReadMessageId\":" + message.getId() + "}"));
     }
 
     private void expectUnreadCount(int expected) throws Exception {
         mockMvc.perform(get("/chat-rooms")
-                        .header(MEMBER_ID_HEADER, context.readerMember().getId()))
+                        .with(authenticatedAs(context.readerMember().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].unreadCount").value(expected));
     }
