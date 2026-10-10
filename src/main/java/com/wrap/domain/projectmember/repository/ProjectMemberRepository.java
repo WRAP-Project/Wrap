@@ -58,6 +58,12 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             ProjectMemberStatus status
     );
 
+    List<ProjectMember> findByProjectIdAndIdInAndStatus(
+            Long projectId,
+            List<Long> ids,
+            ProjectMemberStatus status
+    );
+
     boolean existsByMemberIdAndProjectId(Long memberId, Long projectId);
 
     boolean existsByMemberIdAndProjectIdAndStatus(
