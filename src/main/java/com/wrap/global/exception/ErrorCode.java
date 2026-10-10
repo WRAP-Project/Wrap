@@ -145,6 +145,59 @@ public enum ErrorCode {
             "AVAILABILITY_REQUEST_CANCELED",
             "취소된 일정 조율 요청입니다."
     ),
+    INVALID_PROJECT_MEMBER(
+            HttpStatus.FORBIDDEN,
+            "INVALID_PROJECT_MEMBER",
+            "참여할 수 없는 프로젝트 멤버입니다."
+    ),
+    CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_ROOM_NOT_FOUND", "채팅방을 찾을 수 없습니다."),
+    CHAT_ROOM_MEMBER_REQUIRED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_MEMBER_REQUIRED",
+            "채팅방 참여자만 조회할 수 있습니다."
+    ),
+    CHAT_ROOM_CLOSED(HttpStatus.CONFLICT, "CHAT_ROOM_CLOSED", "종료된 채팅방에서는 변경할 수 없습니다."),
+    CHAT_ROOM_ALREADY_CLOSED(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_ALREADY_CLOSED",
+            "이미 종료된 채팅방입니다."
+    ),
+    CHAT_ROOM_UPDATE_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_UPDATE_FORBIDDEN",
+            "채팅방 이름 수정 권한이 없습니다."
+    ),
+    CHAT_ROOM_CLOSE_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_CLOSE_FORBIDDEN",
+            "채팅방 종료 권한이 없습니다."
+    ),
+    CHAT_ROOM_DELETE_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_DELETE_FORBIDDEN",
+            "채팅방 삭제 권한이 없습니다."
+    ),
+    CHAT_ROOM_SCHEDULE_ALREADY_LINKED(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_SCHEDULE_ALREADY_LINKED",
+            "해당 일정에는 이미 채팅방이 연결되어 있습니다."
+    ),
+    INVALID_MESSAGE_QUERY(
+            HttpStatus.BAD_REQUEST,
+            "INVALID_MESSAGE_QUERY",
+            "cursor와 afterMessageId는 동시에 사용할 수 없습니다."
+    ),
+    MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "MESSAGE_NOT_FOUND", "메시지를 찾을 수 없습니다."),
+    MESSAGE_AUTHOR_REQUIRED(
+            HttpStatus.FORBIDDEN,
+            "MESSAGE_AUTHOR_REQUIRED",
+            "메시지 작성자만 변경할 수 있습니다."
+    ),
+    READ_POSITION_CANNOT_MOVE_BACKWARD(
+            HttpStatus.CONFLICT,
+            "READ_POSITION_CANNOT_MOVE_BACKWARD",
+            "마지막 읽음 위치를 이전 메시지로 되돌릴 수 없습니다."
+    ),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "이미 사용 중인 이메일입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 내부 오류가 발생했습니다.");
 
